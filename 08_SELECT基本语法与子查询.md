@@ -42,7 +42,7 @@
             AND o_orderDATE < '2009-03-01'
     LIMIT 10;
 
-SELECT语法中最重要的三个知识点一个是ORDER BY，一个是GROUP BY，一个是LIMIT
+SELECT 语法中最重要的三个知识点一个是 ORDER BY，一个是 GROUP BY，一个是 LIMIT
 
 ### ORDER BY
 
@@ -58,9 +58,9 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     10000 rows in set (30.563 sec)
 
 
-    #这里会发现运行的比较慢，然而不加order by就比较快，是因为order by是需要额外的开销的
+    # 这里会发现运行的比较慢，然而不加 order by 就比较快，是因为 order by 是需要额外的开销的
 
-一个关于order by的参数，叫排序会用到的内存，默认是256K的大小，这个参数可以在会话级别进行修改：
+一个关于 order by 的参数，叫排序会用到的内存，默认是 256K 的大小，这个参数可以在会话级别进行修改：
 
     (root@localhost) [(none)]> show variables like 'sort_buffer_size';
     +------------------+--------+
@@ -92,9 +92,9 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     .....
     10000 rows in set (17.54 sec)
 
-所以对于如果你的查询中有大量的order by并且是真正的需**要去排序的也没有索引**可以利用的话，这时候一定要注意要去调大sort_buffer_size，这块内存是每个会话会去申请的
+所以对于如果你的查询中有大量的 order by 并且是真正的需**要去排序的也没有索引**可以利用的话，这时候一定要注意要去调大 sort_buffer_size，这块内存是每个会话会去申请的
 
-my.cnf中稍微调大一点sort_buffer_size
+my.cnf 中稍微调大一点 sort_buffer_size
 
     [mysqld]
     ...
@@ -105,7 +105,7 @@ my.cnf中稍微调大一点sort_buffer_size
     # innodb
     innodb_buffer_pool_size = 1G
 
-其实也不用看修改参数前后用select语句去查询速度对比，可以用下面命令来查看当前会话排序的一个状态：
+其实也不用看修改参数前后用 select 语句去查询速度对比，可以用下面命令来查看当前会话排序的一个状态：
 
     (root@localhost) [dbt3]> show status like 'sort%';
     +-------------------+-------+
@@ -118,11 +118,11 @@ my.cnf中稍微调大一点sort_buffer_size
     +-------------------+-------+
     4 rows in set (0.00 sec)
 
-    # 可以使用flush命令重置状态
+    # 可以使用 flush 命令重置状态
     (root@localhost) [dbt3]> flush status;
     Query OK, 0 rows affected (0.00 sec)
 
-在生产环境全局查看当前的sort_buffer_size设置的是否OK，如果Sort_merge_passes比较大的话就需要调大sort_buffer_size这个参数：
+在生产环境全局查看当前的 sort_buffer_size 设置的是否 OK，如果 Sort_merge_passes 比较大的话就需要调大 sort_buffer_size 这个参数：
 
     (root@localhost) [dbt3]> show global status like 'sort%';
     +-------------------+--------+
@@ -134,7 +134,7 @@ my.cnf中稍微调大一点sort_buffer_size
     | Sort_scan         | 32     |
     +-------------------+--------+
 
-sort_buffer_size 是相对于每个会话的，如果这时有100个线程连着都在做 sort 操作的话就会有 100 * sort_buffer_size 的开销，所以 sort_buffer_size 可以设得相对来说大一点但是也别设得太大，因为这个变量是基于每个会话可以使用的内存，加起来如果并发量大的话对内存的开销可能是会比较大的。不建议设得很多，因为有些查询可以去建个索引来避免排序的
+sort_buffer_size 是相对于每个会话的，如果这时有 100 个线程连着都在做 sort 操作的话就会有 100 * sort_buffer_size 的开销，所以 sort_buffer_size 可以设得相对来说大一点但是也别设得太大，因为这个变量是基于每个会话可以使用的内存，加起来如果并发量大的话对内存的开销可能是会比较大的。不建议设得很多，因为有些查询可以去建个索引来避免排序的
 
 order by 的另一种写法：
 
@@ -142,10 +142,10 @@ order by 的另一种写法：
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
-    ORDER BY 3 <--表示对第三个列进行排序
+    ORDER BY 3 # 表示对第三个列进行排序
     LIMIT 10000;
 
-#### LIMIT语法--取前N条记录
+#### LIMIT 语法--取前 N 条记录
 
 实现分页的效果：
 
@@ -153,25 +153,25 @@ order by 的另一种写法：
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
-    LIMIT 0,10; <--取前10条
+    LIMIT 0,10; # 取前10条
 
     SELECT 
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
-    LIMIT 10,10; <--从第10条开始再取10条
+    LIMIT 10,10; # 从第10条开始再取10条
 
-LIMIT语法有一个非常严重的问题，如果limit值很大速度就会非常慢
+LIMIT 语法有一个非常严重的问题，如果 limit 值很大速度就会非常慢
 
     SELECT 
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
-    LIMIT 1000000,10; <--表示先读一百万十条数据，然后再读10条数据给你，前面要先读一百万条数据所以就慢了
+    LIMIT 1000000,10; <--表示先读一百万十条数据，然后再读10条数据给你，前面先要读一百万条数据所以就慢了
 
 ### GROUP BY
 
-对于订单表有这么一个需求，根据orders表中的o_totalprice，o_orderDATE求出每个月产生的订单的总价，这种方式就需要用到GROUP BY了
+对于订单表有这么一个需求，根据 orders 表中的 o_totalprice，o_orderDATE 求出每个月产生的订单的总价，这种方式就需要用到 GROUP BY 了
 
     (root@localhost) [dbt3]> desc orders;
     +-----------------+-------------+------+-----+---------+-------+
@@ -189,7 +189,7 @@ LIMIT语法有一个非常严重的问题，如果limit值很大速度就会非�
     +-----------------+-------------+------+-----+---------+-------+
     9 rows in set (0.00 sec)
 
-通过date_format函数先求出月份时间
+通过 date_format 函数先求出月份时间
 
     (root@localhost) [dbt3]> SELECT
             o_orderDATE,date_format(o_orderDATE,'%Y%m'), o_totalprice
@@ -198,7 +198,7 @@ LIMIT语法有一个非常严重的问题，如果limit值很大速度就会非�
     +-------------+---------------------------------+--------------+
     | o_orderDATE | date_format(o_orderDATE,'%Y%m') | o_totalprice |
     +-------------+---------------------------------+--------------+
-    | 1996-01-02  | 199601                          |    173665.47 |
+    | 1996-01-02  | 199601                          |    173665.47 | <-这里的数据尚未归类，只是其中的某条数据
     | 1996-12-01  | 199612                          |     46929.18 |
     | 1993-10-14  | 199310                          |    193846.25 |
     | 1995-10-11  | 199510                          |     32151.78 |
@@ -211,7 +211,7 @@ LIMIT语法有一个非常严重的问题，如果limit值很大速度就会非�
     +-------------+---------------------------------+--------------+
     10 rows in set (0.00 sec)
 
-然后使用通过使用GROUP BY归类
+然后使用通过使用 GROUP BY 归类
 
     (root@localhost) [dbt3]> SELECT
           DATE_FORMAT(o_orderDATE, '%Y%m'), sum(o_totalprice)
