@@ -60,16 +60,18 @@ MySQL 5.7.19以上还需要安装libnuma库：
 
     $> bin/mysql -uroot -p
     Enter password: Nsf/7N+wQ%<m
-    SET PASSWORD FOR 'root'@'localhost' = '123';
+    $ SET PASSWORD FOR 'root'@'localhost' = '123';
 
 额外的配置：
 
     # 添加环境变量
     vim ~/.bash_profile or vim ~/.zshrc
+    
     PATH=/usr/local/mysql/bin:$PATH:$HOME/bin
     # 修改命令行格式
     export MYSQL_PS1="(\u@\h:\p)[\d]>"
-    source ~/.bash_profile
+
+    source ~/.bash_profile or zsh
 
 添加自动开机启动命令：
 

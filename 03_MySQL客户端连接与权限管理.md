@@ -370,6 +370,12 @@ with grant option 使目标可以将**自身持有的权限**授予给其他用�
     +---------------------------------------------------------------------------------+
     2 rows in set (0.00 sec)
 
+收回 grant option 权限
+
+    (root@localhost) [(none)]> revoke GRANT OPTION on test.* from 'neo'@'%';
+    或者收回所有权限+取消grant option
+    (root@localhost) [(none)]> revoke ALL PRIVILEGES, GRANT OPTION on test.* from 'neo'@'%';
+
 创建用户的数据可以认为是元数据，这些数据存放在mysql库下面
 
 查看用户元数据
