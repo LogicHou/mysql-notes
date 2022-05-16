@@ -25,11 +25,11 @@
     +---------------+-----------------+
     1 row in set (0.00 sec)
 
-这里连接的时候没有在配置文件中加入socket = /tmp/mysql.sock，在命令行连接MySQL的时候默认加上参数"-S/tmp/mysql.sock"
+这里连接的时候没有在配置文件中加入socket = /tmp/mysql.sock，在命令行连接MySQL的时候默认加上参数"-S /tmp/mysql.sock"
 
 通过TCP/IP进行连接
 
-    mysql -h127.0.0.1 -uroot -p456
+    mysql -h127.0.0.1 -uroot -p123
 
 MySQL状态信息中提供了当前连接方式的相关信息
 
@@ -46,7 +46,7 @@ MySQL状态信息中提供了当前连接方式的相关信息
     Using delimiter:        ;
     Server version:         5.7.25 MySQL Community Server (GPL)
     Protocol version:       10
-    Connection:             Localhost via UNIX socket  <--- 连接方式
+    Connection:             Localhost via UNIX socket  <--- 连接方式，这里是通过socket方式连接
     Server characterset:    latin1
     Db     characterset:    latin1
     Client characterset:    latin1
@@ -162,7 +162,7 @@ MySQL5.7默认使用SSL进行连接，可以强制用户使用SSL进行连接
     mysql: [Warning] Using a password on the command line interface can be insecure.
     ERROR 1045 (28000): Access denied for user 'neo'@'localhost' (using password: YES)
 
-X509 开启SSL的同时还需要提供公密钥文件，这里的公密钥文件存在于/mdata/mysql_test_data下面
+X509 开启SSL的同时还需要提供公密钥文件，这里的公密钥文件存在于/mdata/mysql_test_data/ca.pem 下面
 
     (root@localhost) [(none)]> alter user 'neo'@'%' require x509;
     Query OK, 0 rows affected (0.01 sec)
@@ -181,12 +181,10 @@ X509 开启SSL的同时还需要提供公密钥文件，这里的公密钥文件
 
 在线安装
 
-    INSTALL PLUGIN validate_password SONAME 'validate_password.so';
-
-查看是否安装了该插件
-
     (root@localhost) [(none)]> INSTALL PLUGIN validate_password SONAME 'validate_password.so';
     Query OK, 0 rows affected (0.02 sec)
+
+查看是否安装了该插件
 
     (root@localhost) [(none)]> show plugins;
     +----------------------------+----------+--------------------+----------------------+---------+

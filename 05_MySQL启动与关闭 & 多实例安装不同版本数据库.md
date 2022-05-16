@@ -165,22 +165,22 @@
 
 ## MySQL的启动
 
-mysqld 和mysqld_safe启动的区别
+mysqld 和 mysqld_safe 启动的区别
 
-其中mysqld是个二进制文件，而mysqld_safe是一个shell脚本
+其中 mysqld 是个二进制文件，而 mysqld_safe 是一个 shell 脚本
 
-mysqld_safe是一个守护进程，会定期检测mysqld的进程是否存在，如果不存在的话就会把它给拉起来
+mysqld_safe 是一个守护进程，会定期检测 mysqld 的进程是否存在，如果不存在的话就会把它给拉起来
 
 ## 忘记密码的处理方式
 
-在my.cnf中配置skip-grant-tables参数：
+在 my.cnf 中配置 skip-grant-tables 参数：
 
     [mysqld]
     ......
     ......
     ......
     skip-grant-tables
-    # 意为启动msyql但是忽略授权表
+    # 意为启动 msyql 但是忽略授权表
 
 为忘记的账户修改密码：
 
@@ -200,13 +200,13 @@ mysqld_safe是一个守护进程，会定期检测mysqld的进程是否存在，
     (root@localhost) [mysql]> update user set authentication_string = password('Abc123__') where user = 'root' and host = 'localhost';
     Query OK, 0 rows affected, 1 warning (0.00 sec)
     Rows matched: 1  Changed: 0  Warnings: 1
-    # 注意这里必须使用password函数生成密码而不是写入密码
+    # 注意这里必须使用 password 函数生成密码而不是写入密码
 
     # 刷新权限
     (root@localhost) [mysql]> flush privileges;
     Query OK, 0 rows affected (0.00 sec)
 
-    # 从my.cnf中去除或者注释掉skip-grant-tables参数
+    # 从 my.cnf 中去除或者注释掉 skip-grant-tables 参数
     # 重启MySQL
     shell> /etc/init.d/mysql.server restart
     Shutting down MySQL..                                      [  OK  ]
@@ -232,10 +232,10 @@ mysqld_safe是一个守护进程，会定期检测mysqld的进程是否存在，
     shell> cd /usr/local/mysql56
     shell> scripts/mysql_install_db --user=mysql --datadir=/mdata/data4
     shell> mysqld_multi start 4
-    shell> mysql -S /tmp/mysql.sock4 -p
+    shell> mysql -S /tmp/mysql.sock4 -p #5.6默认初始化后没有密码
     shell> set password = password('Abc123__');
 
-    !! 如果安装后无法用mysqld_multi启动，尝试删除数据目录，然后禁用my.cnf中的
+    !! 如果安装后无法用mysqld_multi启动，尝试删除数据目录，然后禁用 my.cnf 中的
     #plugin-load=validate_password.so
     #default_password_lifetime = 0
     然后重新初始化
@@ -262,7 +262,7 @@ mysqld_safe是一个守护进程，会定期检测mysqld的进程是否存在，
     shell> mysql -S /tmp/mysql.sock80 -p'******'
     shell> set password = 'Abc123__';
 
-由此可以证实5.7版本的mysqld_safe可以成功启动5.6，5.7，8.0的版本
+由此可以证实 5.7 版本的 mysqld_safe 可以成功启动 5.6，5.7，8.0 的版本
 
     shell> mysqld_multi report
     Reporting MySQL servers
@@ -286,7 +286,7 @@ mysqld_safe是一个守护进程，会定期检测mysqld的进程是否存在，
     +-------------------------------+-----------------------+
     5 rows in set (0.00 sec)
 
-    这里default_password_lifetime如果不为0，时间到期后密码就会过期失效，可能对线上运行的程序造成影响。注意在某些MySQL5.7版本中这个值默认为360推荐改为0，可以在配置文件中就直接将这个值设为0，避免5.7密码有坑的问题
+    这里 default_password_lifetime 如果不为0，时间到期后密码就会过期失效，可能对线上运行的程序造成影响。注意在某些 MySQL5.7 版本中这个值默认为 360 推荐改为 0，可以在配置文件中就直接将这个值设为 0，避免 5.7 密码有坑的问题
 
     shell> vim /etc/my.cnf
 
