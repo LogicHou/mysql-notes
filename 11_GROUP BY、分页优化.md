@@ -15,9 +15,9 @@
 
 GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（可以是一个字段也可以是多个字段）
 
-比如一个需求，每个用户产生的订单总额，其中的"每"就代表 GROUP BY（GROUP BY userid FROM orders）
+比如一个需求，每个用户产生的订单总额，其中的**"每"**就代表 GROUP BY（GROUP BY userid FROM orders）
 
-然后 SELECT 中必须出现 userid 和聚合函数
+**然后 SELECT 中必须出现 userid 和聚合函数**
 
 这就是分组，也就是说根据某个字段来进行分组，分组完之后要对其他字段进行一个聚合操作（max，min，count，sum）
 
@@ -27,7 +27,7 @@ GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（�
 
 演示：每个雇员每个月产生的订单的数量，订单的总额，平均订单的价格是多少
 
-    SELECT 
+    (root@localhost) [dbt3]> SELECT 
         DATE_FORMAT(o_orderDATE, '%Y-%m'),
         o_clerk,
         COUNT(1),
@@ -39,7 +39,7 @@ GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（�
 
 这条SQL语句还可以进行调优
 
-做分组 GROUP BY 操作的时候会产生一个临时表，用explain命令看下：
+做分组 GROUP BY 操作的时候会产生一个临时表，用 explain 命令看下：
 
     (root@localhost) [dbt3]> EXPLAIN SELECT
                  DATE_FORMAT(o_orderDATE, '%Y-%m'),
@@ -57,9 +57,9 @@ GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（�
     +----+-------------+--------+------------+------+---------------+------+---------+------+---------+----------+---------------------------------+
     1 row in set, 1 warning (0.00 sec)
 
-    # Using temporary就是表示产生了一个临时表
+    # Using temporary 就是表示产生了一个临时表
 
-对优化的方法可以使用tmp_table_size参数，这个参数默认是16M大小
+对优化的方法可以使用 tmp_table_size 参数，这个参数默认是 16M 大小
 
     (root@localhost) [dbt3]> show variables like 'tmp_table_size';
     +----------------+----------+
@@ -87,7 +87,7 @@ GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（�
 
 通过 flush status 清除后再运行 GROUP BY 语句如果 Created_tmp_disk_tables 越小则性能提升越多
 
-my.cnf中推荐设置成32M
+my.cnf 中推荐设置成 32M
 
     [mysqld]
     ...
@@ -145,14 +145,14 @@ my.cnf中推荐设置成32M
 
     # count(1) 返回表里的记录数
     # count(a) 返回表里列a不为NULL值的记录数
-    # count(*) 和count(1)一模一样没有区别，其实括号里的数字随便多少都可以比如count(2), count(3), count(100), 都是一样的
+    # count(*) 和 count(1) 一模一样没有区别，其实括号里的数字随便多少都可以比如 count(2), count(3), count(100), 都是一样的
 
 ### HAVING where condition
 
-和where过滤是不一样的，看下例子：
+和 where 过滤是不一样的，看下例子：
 
-    SELECT 
-        DATE_FORMAT(o_orderDATE, '%Y-%m'),
+    (root@localhost) [dbt3]> SELECT 
+        DATE_FORMAT(o_orderDATE, '%Y-%m') month,
         COUNT(*) count,
         SUM(o_totalprice) sum
     FROM
@@ -162,21 +162,23 @@ my.cnf中推荐设置成32M
             AND o_orderDATE < '1992-01-01'
     GROUP BY DATE_FORMAT(o_orderDATE, '%Y-%m')
     HAVING count > 19000;
+    Empty set (0.00 sec)
 
-HAVING的意思是对聚合之后的表达式进行过滤
+HAVING 的意思是对聚合之后的表达式进行过滤
 
-如果没有使用where进行过滤就使用HAVING，可能就会扫描全表，如果使用where之后再使用HAVING则是在过滤之后的结果中再进行过滤，查询性能就会好很多，这一点**非常重要**
+如果没有使用 where 进行过滤就使用 HAVING，可能就会扫描全表，如果使用 where之 后再使用 HAVING 则是在过滤之后的结果中再进行过滤，查询性能就会好很多，这一点**非常重要**
 
 像下面这么写查询性能就会比较差：
 
     SELECT 
-        DATE_FORMAT(o_orderDATE, '%Y-%m'),
+        DATE_FORMAT(o_orderDATE, '%Y-%m') month,
         COUNT(*) count,
         SUM(o_totalprice) sum
     FROM
         orders
     GROUP BY DATE_FORMAT(o_orderDATE, '%Y-%m')
     HAVING count > 19000 AND month >= '1991-01' AND month < '1992-01';
+    Empty set (1.53 sec) <--虽然结果也是Empty的，但是运行时间明显变长了，而上面那个例子则是秒出的
 
 ### GROUP BY 中出现非分组字段列表和聚合函数的问题
 
@@ -225,10 +227,10 @@ HAVING的意思是对聚合之后的表达式进行过滤
 
     (root@localhost) [test]> select userid, sum(price), date from a group by userid;
     ERROR 1055 (42000): Expression #3 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'test.a.date' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-    # mysql 5.7 版本中如果group by了某个字段，那么在select中它只能出现那个分组的字段列表和聚合函数，绝对不能出现另外一个单独的列
-    # 在mysql 5.6版本中不会报错，date会出现任何任何记录当中随机的一条记录
+    # mysql 5.7 版本中如果group by了某个字段，那么在select中它只能出现那个分组的字段列表和聚合函数，绝对不能出现另外一个单独的列(这里是date列)
+    # 在mysql 5.6 版本中不会报错，date会出现任何任何记录当中随机的一条记录
 
-一个很重要的参数 sql model，比5.6多了 ONLY_FULL_GROUP_BY，所以5.7中变得不一样
+一个很重要的参数 sql model，比 5.6多 了 ONLY_FULL_GROUP_BY，所以 5.7 中变得不一样
 
     (root@localhost) [(none)]> show variables like 'sql_mode';
     +---------------+-------------------------------------------------------------------------------------------------------------------------------------------+
@@ -243,7 +245,7 @@ HAVING的意思是对聚合之后的表达式进行过滤
     set sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';
     Query OK, 0 rows affected (0.00 sec)
 
-推荐设置成这样的严格模式 my.cnf，但是有个问题如果将已经插入非严格数据的 5.6、5.5 版本的数据库突然改成了严格模式，那么应用程序那边可能就完蛋了。特别是5.5、5.6升级到5.7的时候就出错了
+推荐设置成这样的严格模式 my.cnf，但是有个问题如果将已经插入非严格数据的 5.6、5.5 版本的数据库突然改成了严格模式，那么应用程序那边可能就完蛋了。特别是 5.5、5.6 升级到 5.7 的时候就出错了
 
 所以老业务推荐想清楚了再改，新业务则强烈推荐开启严格模式 my.cnf
 
@@ -344,17 +346,17 @@ HAVING的意思是对聚合之后的表达式进行过滤
 
 ##### ANY
 
-* ANY 关键词的意思是“对于在子查询返回的列中的任一数值，如果比较结果为TRUE的话，则返回TRUE”
+* ANY 关键词的意思是“对于在子查询返回的列中的任一数值，如果比较结果为 TRUE 的话，则返回 TRUE”
         
-      SELECT s1 FROM t1 WHERE s1 > ANY (SELECT s1 FROM t2);
+      SELECT s1 FROM t1 WHERE s1 > ANY (SELECT s1 FROM t2); # 也就是s1 t1 中的所有值必须大于any 后面筛选出来的值，这个where条件才成立
 
 * SOME = ANY
-* IN equals = ANY 用得最多的，大部分情况下推荐使用这个
+* IN equals = ANY 表示等于ANY中的任何一个值就可以了，这是用得最多的的类型，大部分情况下推荐使用这个
 
       SELECT s1 FROM t1 WHERE s1 = ANY (SELECT s1 FROM t2);
       SELECT s1 FROM t1 WHERE s1 IN (SELECT s1 FROM t2);
 * ALL
-  * 对于子查询返回的列中的所有值，如果比较结果为TRUE，则返回TRUE
+  * 对于子查询返回的列中的所有值，如果比较结果为 TRUE，则返回 TRUE
 * NOT IN equals <> ALL
   
       SELECT s1 FROM t1 WHERE s1 > ALL (SELECT s1 FROM t2)
@@ -411,10 +413,10 @@ HAVING的意思是对聚合之后的表达式进行过滤
 
 ### EXISTS谓词
 
-* EXISTS谓词
-  * 仅返回TRUE、FALSE
-  * UNKNOWN返回为FALSE
-* 查询返回来自Spain且发生过订单的消费者
+* EXISTS 谓词
+  * 仅返回 TRUE、FALSE
+  * UNKNOWN 返回为 FALSE
+* 查询返回来自 Spain 且发生过订单的消费者
   
       SELECT 
           customerid, companyname
@@ -429,14 +431,14 @@ HAVING的意思是对聚合之后的表达式进行过滤
               WHERE
                   A.customerid = B.customerid);
 
-IN写法的示例，这里属于独立子查询
+IN 写法的示例，这里属于独立子查询
 
-    SELECT 
+    (root@localhost) [employees]> SELECT 
         *
     FROM
         employees
     WHERE
-        emp_no IN (SELECT 
+        emp_no IN (SELECT     # IN的写法是某个列IN某个子查询
                 emp_no
             FROM
                 dept_emp
@@ -444,19 +446,19 @@ IN写法的示例，这里属于独立子查询
                 dept_no = 'd005')
     LIMIT 10;
 
-EXISTS写法的示例，这里属于相关子查询
+EXISTS 写法的示例，这里属于相关子查询
 
-    SELECT 
+    (root@localhost) [employees]>  SELECT 
         *
     FROM
         employees e
     WHERE
-        EXISTS( SELECT 
+        EXISTS( SELECT       # EXISTS的写法就是直接带一个子查询
                 *
             FROM
                 dept_emp de
             WHERE
-                dept_no = 'd005' AND e.emp_no = de.emp_no) <--这里和外部表进行了关联，以此作为是相关子查询的依据
+                dept_no = 'd005' AND e.emp_no = de.emp_no) # 这里和外部表进行了关联，以此作为是相关子查询的依据
     LIMIT 10;
 
 ### 子查询的优化
@@ -474,9 +476,9 @@ EXISTS写法的示例，这里属于相关子查询
                   orders
               GROUP BY (DATE_FORMAT(o_orderdate, '%Y%M')));
 
-* 改写成EXISTS，这里的GROUP BY执行了150W次，明显上面的写法性能更好，同时也体现了独立子查询和相关子查询的区别
+* 改写成 EXISTS，这里的 GROUP BY 执行了 150W 次，明显上面的写法性能更好，同时也体现了独立子查询和相关子查询的区别
 
-      SELECT 
+      (root@localhost) [dbt3]> SELECT 
           *
       FROM
           orders a
@@ -488,7 +490,7 @@ EXISTS写法的示例，这里属于相关子查询
               GROUP BY (DATE_FORMAT(o_orderdate, '%Y%M'))
               HAVING MAX(o_orderdate) = a.o_orderdate);
 
-MySQL 对于所有IN的子查询在 5.6 以前的版本中都是重写成了 EXISTS 相关子查询，执行效率非常非常差，最重要的原因是相关子查询会执行 N 多次，因为需要额外表中的每一行数据来进行关联，外部表有多少行记录子查询就需要执行多少次
+MySQL 对于所有 IN 的子查询在 5.6 以前的版本中都是重写成了 EXISTS 相关子查询，执行效率非常非常差，最重要的原因是相关子查询会执行 N 多次，因为需要额外表中的每一行数据来进行关联，外部表有多少行记录子查询就需要执行多少次
 
 从 5.6 开始 IN 不会重写成 EXISTS，对 IN 有一些独特的优化
 
@@ -497,14 +499,14 @@ MySQL 对于所有IN的子查询在 5.6 以前的版本中都是重写成了 EXI
 ### NOT EXISTS
 
 * NOT EXISTS => NOT IN
-  * 注意NULL值的过滤
+  * 注意 NULL 值的过滤
 * 包含 NULL 的 NOT IN
   * FALSE
   * NOT NULL
 
 在某些情况下 IN 和 EXISTS 有很大的不同，这种情况叫 NULL 值
 
-来看下IN会有什么样的问题
+来看下 IN 会有什么样的问题
 
     (root@localhost) [test]> select 'a' in ('a','b','c');
     +----------------------+
@@ -546,7 +548,7 @@ MySQL 对于所有IN的子查询在 5.6 以前的版本中都是重写成了 EXI
     +----------------------------+
     1 row in set (0.00 sec)
 
-NOT IN 永远只会返回0和NULL
+NOT IN 永远只会返回 0 和 NULL
 
 这就会遇到一个问题，来看下这个例子：
 
@@ -587,7 +589,7 @@ NOT IN 永远只会返回0和NULL
     Empty set (0.00 sec)
     # 按道理应该返回 userid 为 3 的数据，但是返回的确实空值，空值的原因就在于前面例子中的 NOT IN 对于带有 NULL 值的只会返回 0 和 NULL 值，where 中 0 和 NULL 值代表的就是 false，所以永远取不到想要的结果
     # 这一点要非常注意
-    # 如果遇到类似的问题，第一反应应该就是子查询的数据集里是否带了NULL值
+    # 如果遇到类似的问题，第一反应应该就是子查询的数据集里是否带了 NULL 值
 
 #### 改写，先把 NULL 值过滤掉
 
@@ -618,9 +620,11 @@ NULL 值的确是一个坑，很多时候要去避免这个坑，要想到很多
 
 对于分页的问题，越分到后面性能就越差
 
-SELECT * FROM employees ORDER BY birth_date LIMIT 30;
+    (root@localhost) [employees]> SELECT * FROM employees ORDER BY birth_date LIMIT 30;
+    30 rows in set (0.25 sec)
 
-SELECT * FROM employees ORDER BY birth_date LIMIT 100000, 30; <--性能越来越差
+    (root@localhost) [employees]> SELECT * FROM employees ORDER BY birth_date LIMIT 100000, 30;
+    30 rows in set (0.25 sec) # 性能越来越差
 
 ### 一种优化方式
 
@@ -628,7 +632,7 @@ SELECT * FROM employees ORDER BY birth_date LIMIT 100000, 30; <--性能越来越
       
     (root@localhost) [emp]> ALTER TABLE employees ADD INDEX idx_birth_date(birth_date,emp_no);
     
-    #然后用下面的方式进行查询
+    # 然后用下面的方式进行查询
     (root@localhost) [emp]> SELECT * FROM employees ORDER BY birth_date, emp_no LIMIT 30;
     +--------+------------+------------+--------------+--------+------------+
     | emp_no | birth_date | first_name | last_name    | gender | hire_date  |
@@ -640,22 +644,38 @@ SELECT * FROM employees ORDER BY birth_date LIMIT 100000, 30; <--性能越来越
     30 rows in set (0.00 sec)
 
     SELECT * FROM employees 
-    WHERE (birth_date, emp_no) > ('1952-02-02', 217446) <--可以理解为两个列组成的一个子查询
+    WHERE (birth_date, emp_no) > ('1952-02-02', 217446) # 可以理解为两个列组成的一个子查询
     ORDER BY birth_date LIMIT 30;
 
 这种做法性能都是平均的，不会越翻越慢，其中的('1952-02-02',217446)从程序里或者页面里取就可以
 
 缺点是分页的时候只能下一页和上一页，不能做跳转到第几页，同时这么做对应用程序的改动太大比较难用
 
-* 首先取1000条数据，前端进行分页
+* 首先取 1000 条数据，前端进行分页
 * 找到一个唯一索引，通过排序列和唯一索引进行分页
 
 ### select * 和 select count(1) 的优化问题
 
-其实这是没什么意义的事情，select count(1) 你看到的数据永远不是很准确的，你看到的只是你在9点钟按下回车那个时候的数据，但是如果这条 sql 语句执行了 10 秒钟，这 10 秒钟里面这张表可能少了数据也有可能多了数据，除非这张表是不变化的，否则 count 不是很准确的
+其实这是没什么意义的事情，select count(1) 你看到的数据永远不是很准确的，你看到的只是你在 9 点钟按下回车那个时候的数据，但是如果这条 sql 语句执行了 10 秒钟，这 10 秒钟里面这张表可能少了数据也有可能多了数据，除非这张表是不变化的，否则 count 不是很准确的
 
 既然 count 不是一个精确的值就有很多种方法去优化它，首先第一点 count 这个值可以写在缓存里，之后每次有发生更新的话先更新缓存，定期再把数据更新到数据库
 
 另外一点既然他是不准的，那么可以定期去执行，比如去 slave 执行，不要实时的去执行，不建议 count 这个操作实时的在数据库里进行操作
 
 需要准确的 count 话就先加锁，for update
+
+    (root@localhost) [dbt3]> select count(1) from orders;
+    +----------+
+    | count(1) |
+    +----------+
+    |  1500000 |
+    +----------+
+    1 row in set (0.29 sec)
+
+    (root@localhost) [dbt3]> select count(1) from orders for update;
+    +----------+
+    | count(1) |
+    +----------+
+    |  1500000 |
+    +----------+
+    1 row in set (3.40 sec)
