@@ -139,7 +139,7 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
     +------+------+
     1 row in set (0.00 sec)
 
-所以即使 x,y 两张表很大，并且在 a=1 这个列上是有索引的话，其实 JOIN 并不会产生笛卡尔积
+所以即使 x,y 两张表很大，但是在 a=1 这个列上是有索引的话，其实 JOIN 并不会产生笛卡尔积
 
 只有你没有关联条件，然后又有 a=1 这样的过滤条件的话，才会先产生笛卡尔积
 
@@ -157,11 +157,11 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
 
 分两条语句写性能会更好？其实是很没有道理的
 
-### 示例：emp 数据库下有 employees 这张表，现在要求出这个员工所在的部门的名称是多少
+### 示例：employees 数据库下有 employees 这张表，现在要求出这个员工所在的部门的名称是多少
 
 首先使用这样的语句进行查询
 
-    (root@localhost) [emp]> SELECT 
+    (root@localhost) [employees]> SELECT 
         e.emp_no, t.title
     FROM
         employees e,
@@ -181,7 +181,7 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
 
 所以这样进行关联的话取出的是员工所有曾经的 title 信息，将 t 表中的 t.from_date, t.to_date 取出来会看得更清晰一点
 
-    (root@localhost) [emp]> SELECT 
+    (root@localhost) [employees]> SELECT 
         e.emp_no, t.title, t.from_date, t.to_date
     FROM
         employees e,
@@ -199,24 +199,25 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
 
 一对多的情况下取 JOIN 会将这种多的关系给显示出来
 
-#### 取出每个员工最新的title信息：
+#### 取出每个员工最新的 title 信息：
 
-求出当前每个员工最新的titles信息：
+求出当前每个员工最新的 titles 信息：
 
-    (root@localhost) [emp]> SELECT
+    (root@localhost) [employees]> SELECT
         emp_no, title
     FROM
         titles
     WHERE
-        (emp_no , to_date) IN (SELECT 
+        (emp_no, to_date) IN (SELECT 
                 emp_no, MAX(to_date)
             FROM
                 titles
             GROUP BY emp_no);
+    300033 rows in set (1.62 sec)
 
 改写关联语句达到效果(通过派生表的方式，也就是以上面查询语句的结果集进行关联)：
 
-    (root@localhost) [emp]> SELECT 
+    (root@localhost) [employees]> SELECT 
         e.emp_no, t.title
     FROM
         employees e,
@@ -232,12 +233,13 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
                 GROUP BY emp_no)) t
     WHERE
         e.emp_no = t.emp_no;
+    300033 rows in set (2.56 sec)
 
 ## 外连接 outer 关键词可以省略
 
-左连接将 x 作为左表，x 作为保留表，保留表中的所有行都要出现，之后再和y表进行关联
+左连接将 x 作为左表，x 作为保留表，保留表中的所有行**都要出现**，之后再和y表进行关联
 
-如果关联条件成立就将数据关联出来，如果关联条件不成立就用 NULL 值进行填充，但是左表中的数据都要出现
+如果关联条件成立就将数据关联出来，如果关联条件不成立就用 NULL 值进行填充，但是左表中的数据**都要出现**
 
 right outer join 右连接就是反过来右边那个表是保留表，原理和左连接也是一样的
 
@@ -252,7 +254,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
     +------+------+------+---------------------+
     4 rows in set (0.00 sec)
 
-对于left join经常使用的一个方法是，取出在左表中但是不在右表中的数据(差集)
+对于 left join 经常使用的一个方法是，取出在左表中但是不在右表中的数据(差集)
 
     (root@localhost) [test]> select * from x left outer join y on x.a = y.a where y.a is NULL;
     +------+------+------+------+
@@ -273,7 +275,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
 
 ### where 和 on 过滤条件两者到底是怎样来进行过滤的呢？
 
-先来看下 inner join：
+先来看下 inner join，此时将 where 条件写在 on 里是可以的：
 
     (root@localhost) [test]> select * from x inner join y on x.a = y.a where x.a = 1;
     +------+------+------+---------------------+
@@ -292,7 +294,17 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
     +------+------+------+---------------------+
     1 row in set (0.00 sec)
 
-left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表进行关联，然而 y 表的关联条件不但是 x.a = y.a，而且要 y.a 是 NULL 值，这两张表的关联条件是这整个条件(y on x.a = y.a and y.a is NULL)，显然这里 y.a 都不是NULL，所以这里出现的都是 NULL：
+如果写成 where y.a is NULL 就是取出在左表中但是不在右表中的数据
+
+    (root@localhost) [test]> select * from x left outer join y on x.a = y.a where y.a is not NULL;
+    +------+------+------+------+
+    | a    | b    | a    | b    |
+    +------+------+------+------+
+    |    3 |   30 | NULL | NULL |
+    +------+------+------+------+
+    1 row in set (0.00 sec)
+
+如果改成 on x.a = y.a and y.a is NULL 右边就会都是 NULL 值
 
     (root@localhost) [test]> select * from x left outer join y on x.a = y.a and y.a is NULL;
     +------+------+------+------+
@@ -304,11 +316,11 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
     +------+------+------+------+
     3 rows in set (0.00 sec)
 
-对 inner join 来说 where 的过滤条件是可以写在 on 里面的
+这是因为首先 x 表的所有都要保留，接着和 y 表进行关联，但是 y 表的关联条件不仅是 x.a = y.a，而且要 y.a 是 NULL 值，也就是说这两张表的关联条件是这整个条件(y on x.a = y.a and y.a is NULL)，显然这里都不满足因为 y.a 都不是 NULL 值，所以这里出现的都是 NULL
 
-对外连接的话 on 是做表之间的关联，where 是用来做其他条件的过滤，千万不要把其他条件的过滤写到 on 里面，否则出来的结果可能是错误的
+对 inner join 来说 where 的过滤条件是可以写在 on 里面。但是对外连接的话 on 是做表之间的关联，where 是用来做其他条件的过滤，千万不要把其他条件的过滤写到 on 里面，否则出来的结果可能是错误的
 
-### 例子 - 返回客户是加拿大的，但是1997年没有产生订单的客户
+### 例子 - 返回客户是加拿大的，但是 1997 年没有产生订单的客户
 
     -- 订单表
     (root@localhost) [dbt3]> desc orders;
@@ -326,6 +338,7 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
     | o_comment       | varchar(79) | YES  |     | NULL    |       |
     +-----------------+-------------+------+-----+---------+-------+
     9 rows in set (0.00 sec)
+
     -- 订单表 国家表
     (root@localhost) [dbt3]> desc nation;
     +-------------+--------------+------+-----+---------+-------+
@@ -337,6 +350,7 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
     | n_comment   | varchar(152) | YES  |     | NULL    |       |
     +-------------+--------------+------+-----+---------+-------+
     4 rows in set (0.00 sec)
+
     -- 客户表
     (root@localhost) [dbt3]> desc customer;
     +--------------+--------------+------+-----+---------+-------+
@@ -365,11 +379,11 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
         nation n ON c.c_nationkey = n_nationkey
     WHERE
         o.o_orderkey IS NULL
-            AND o.o_orderDATE >= '1997-01-01' <--问题出现在这里，其实符合条件的没有下过订单的用户这里都是NULL值，所以用这个字段来进行判断本身就是互斥的是错误的
+            AND o.o_orderDATE >= '1997-01-01' # 问题出现在这里，其实符合条件的没有下过订单的用户这里都是NULL值，所以用这个字段来进行判断本身就是互斥的是错误的
             AND o.o_orderDATE < '1998-01-01'
             AND n.n_name = 'CANADA';
 
-在写 left join 的时候，要判断一下这里的 where is null 进行过滤的时候和我其他的过滤条件之间是什么样的一个关系，如果这个关系之间是互斥的话，那么建议要把这个关系现在派生表去进行过滤，然后再做 left join
+在写 left join 的时候，要判断一下这里的 where is null 进行过滤的时候和我其他的过滤条件之间是什么样的一个关系，如果这个关系之间是互斥的话，那么建议要把这个关系写在派生表去进行过滤，然后再做 left join
 
 #### 正确的两种写法：
 
@@ -417,7 +431,7 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
 
 从表里取数据希望每条记录前面有一个行号，但是如果想要取出来的数据没有一个自增的行号，在 oracal 数据库中有一个叫 row number 的函数，会自动帮你加一个行号的列，但是 MySQL 并没有这样的一个功能
 
-    (root@localhost) [emp]> select * from employees order by emp_no limit 10;
+    (root@localhost) [employees]> select * from employees order by emp_no limit 10;
     +--------+------------+------------+-----------+--------+------------+
     | emp_no | birth_date | first_name | last_name | gender | hire_date  |
     +--------+------------+------------+-----------+--------+------------+
@@ -436,10 +450,10 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
 
 可以用自定义变量实现，首先去 set 一个变量：
 
-    (root@localhost) [emp]> set @a:=0;
+    (root@localhost) [employees]> set @a:=0;
     Query OK, 0 rows affected (0.00 sec)
 
-    (root@localhost) [emp]> select @a;
+    (root@localhost) [employees]> select @a;
     +------+
     | @a   |
     +------+
@@ -447,7 +461,7 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
     +------+
     1 row in set (0.00 sec)
 
-    (root@localhost) [emp]> select @a:=@a+1 as rownum,emp_no,birth_date,first_name,last_name,gender,hire_date from employees limit 10;
+    (root@localhost) [employees]> select @a:=@a+1 as rownum,emp_no,birth_date,first_name,last_name,gender,hire_date from employees limit 10;
     +--------+--------+------------+------------+-----------+--------+------------+
     | rownum | emp_no | birth_date | first_name | last_name | gender | hire_date  |
     +--------+--------+------------+------------+-----------+--------+------------+
@@ -466,16 +480,16 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
 
 这么写有两个小问题
 
-* 要分两次sql语句才能提交
+* 要分两次 sql 语句才能提交
 * 第二次执行的时候行号从11开始了，变量需要重新初始化
 
-其实还有这么一种写法，好处是一条sql就可以完成，会自动初始化自定义变量
+其实还有这么一种写法，好处是一条 sql 就可以完成，会自动初始化自定义变量
 
-    (root@localhost) [emp]> select @a:=@a+1 as rownum,emp_no,birth_date,first_name,last_name,gender,hire_date from employees,(select @a:=0) a limit 10;
+    (root@localhost) [employees]> select @a:=@a+1 as rownum,emp_no,birth_date,first_name,last_name,gender,hire_date from employees,(select @a:=0) a limit 10;
 
 原理是两表关联产生了笛卡尔积，首先select @a:=0；产生了只有一个列的一张表：
 
-    (root@localhost) [emp]> select @a:=0;
+    (root@localhost) [employees]> select @a:=0;
     +-------+
     | @a:=0 |
     +-------+
@@ -483,19 +497,19 @@ left join 则不行，因为首先 x 表的所有都要保留，接着和 y 表�
     +-------+
     1 row in set (0.00 sec)
 
-employees和一行一列这个表进行关联，出来的还是 N*1 行数据，然后MySQL中允许某个变量在每一行进行变化(@a:=@a+1)
+employees 和一行一列这个表进行关联，出来的还是 N*1 行数据，然后MySQL中允许某个变量在每一行进行变化 (@a:=@a+1)
 
-这就是MySQL中求行号问题的一个标准语法
+这就是 MySQL 中求行号问题的一个标准语法
 
 TIPS: limit 取数据不加排序是随机取数据的，因为集合这个东西就是随机的
 
 ### SQL JOIN -- 问题2
 
 * 子查询求行号
-* 行号通过count(1)进行计算，也就是每次计算和第一条数据的数据总数来进行计算行号
-* 但是这么做就形成了一个相关子查询，相关子查询的计算的代价是非常大的，每一条数据都要做count(1)
+* 行号通过 count(1) 进行计算，也就是每次计算和第一条数据的数据总数来进行计算行号
+* 但是这么做就形成了一个相关子查询，相关子查询的计算的代价是非常大的，每一条数据都要做 count(1)
 
-        (root@localhost) [emp]> SELECT 
+        (root@localhost) [employees]> SELECT 
             emp_no,
             (SELECT 
                     COUNT(1)
@@ -518,18 +532,20 @@ where 是其他列的过滤条件
 
 TIPS：
 
-倒库的时候可以buffer_pool调大一点
+倒库的时候可以 buffer_pool 调大一点
 
     vim /etc/my.cnf
+
+    [mysqld]
     # innodb
-    32 innodb_buffer_pool_size = 1G
-    33 innodb_log_file_size = 128M
+    innodb_buffer_pool_size = 1G
+    innodb_log_file_size = 128M
 
 ## 一些例子 
 
 首先发现有一个员工的数据存在了两天 to_date 一样的数据，这样用 group by 来进行分组的话就会出错
 
-    (root@localhost) [emp]> SELECT
+    (root@localhost) [employees]> SELECT
             *
         FROM
             salaries
@@ -552,7 +568,7 @@ TIPS：
   
 那么先筛选掉重复的数据，即一对多表示的情况下求最新的员工的信息：
 
-    (root@localhost) [emp]> SELECT 
+    (root@localhost) [employees]> SELECT 
         emp_no, salary
     FROM
         salaries
@@ -563,11 +579,11 @@ TIPS：
                 salaries
             GROUP BY emp_no);
 
-这样需要扫2次才能查询完毕，第一次是派生表的扫描，第二次是外面select的扫描
+这样需要扫 2 次才能查询完毕，第一次是派生表的扫描，第二次是外面 select 的扫描
 
 一次扫完的写法(先使用 GROUP_CONCAT，然后再 SUBSTRING_INDEX 取第一个字符串，最后转成整形)：
 
-    (root@localhost) [emp]> SELECT 
+    (root@localhost) [employees]> SELECT 
         emp_no,
         CAST(SUBSTRING_INDEX(GROUP_CONCAT(salary
                         ORDER BY to_date DESC , from_date DESC),
