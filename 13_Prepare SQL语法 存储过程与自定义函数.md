@@ -9,7 +9,7 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 例子：
 
-    SET @s = 'SELECT * FROM employees WHERE emp_no = ?'; -- ?号表示预替换的值
+    SET @s = 'SELECT * FROM employees WHERE emp_no = ?'; -- ? 号表示预替换的值
     SET @a = 100080; -- 设置值
     PREPARE stmt FROM @s; -- 准备语句
     EXECUTE stmt USING @a; -- 执行语句
@@ -17,7 +17,8 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 什么是SQL注入：
 
-    SELECT * FROM employees WHERE emp_no = 10080 OR 1=1; -- 这样( 1=1 表示 true )会取出所有数据而不是 10080 号员工的数据，这时如果你的管理员用户在同一张表，那么可能就会泄露了
+    SELECT * FROM employees WHERE emp_no = 10080 OR 1=1;
+    -- 这样( 1=1 表示 true )会取出所有数据而不是 10080 号员工的数据，这时如果你的管理员用户在同一张表，那么可能就会泄露了
 
 改写：
 
@@ -50,6 +51,18 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
     PREPARE stmt FROM @s;
     EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+
+或者
+
+    SET @s = 'SELECT * FROM employees WHERE 1=1'; 
+    SET @s = CONCAT(@s, ' AND gender = ?');
+    SET @s = CONCAT(@s, ' AND birth_date >= ?');
+    SET @a = "m"; -- 设置值
+    SET @b = "1960-01-01"; -- 设置值
+
+    PREPARE stmt FROM @s;
+    EXECUTE stmt USING @a, @b;
     DEALLOCATE PREPARE stmt;
 
 ### 示例2，带上了分页
@@ -173,7 +186,9 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 ### 示例
 
-    update x set b = b + 10 where a = 3;
+    (root@localhost) [test]> insert into x values(3,40);
+    Query OK, 1 row affected (0.00 sec)
+    (root@localhost) [test]> update x set b = b + 10 where a = 3;
 
 ### 存在的小问题
 
@@ -196,8 +211,8 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     | a    | b    |
     +------+------+
     |    1 |   10 |
-    |    3 |   13 | -- 这里是 13 而不是 3，12 是因为 a=a+1 已经先计算成了 3，然后再在 b=a+10 中进行了计算
-    |    3 |   40 |
+    |    3 |   13 | -- 这里是 13 而不是 12 是因为 a=a+1 已经将 a 计算成了 3，然后再在 b=a+10 中进行了计算
+    |    3 |   50 |
     +------+------+
     3 rows in set (0.00 sec)
 
@@ -214,11 +229,11 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     (root@localhost) [test]> insert into z value(1);
     Query OK, 1 row affected (0.00 sec)
 
-    (root@localhost) [test]> insert into z select 2; -- select(2)表示插入一张空表的意思
+    (root@localhost) [test]> insert into z select 2; -- select(2)表示from于一张空表的意思
     Query OK, 1 row affected (0.00 sec)
     Records: 1  Duplicates: 0  Warnings: 0
 
-    (root@localhost) [test]> insert into z select 3 from dual; -- 同上
+    (root@localhost) [test]> insert into z select 3 from dual; -- 同上 这里from于一张dual空表的
     Query OK, 1 row affected (0.01 sec)
     Records: 1  Duplicates: 0  Warnings: 0
 
@@ -343,6 +358,12 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 意思是 replace into z values (2, 3) 先插入 2，发现 2 这条记录是存在的所以 replace 做的是 delete 操作，把重复的 a=2 的这条记录删除了，删完之后重新再插 (2, 3) 这条记录，这时候又发现 b=3 这条记录也存在于是又把 b=3 也删除了，删除这 2 条记录之后接着再插入 (2, 3)
 
+所以影响的 3 行依次是：
+
+    delete | 2 | 2 |
+    delete | 1 | 3 |
+    insert | 2 | 3 |
+
 replace 会将所有重复的数据先删掉再插入，是肯定可以执行成功的
 
 使用 on duplicate key 则不行：
@@ -352,13 +373,16 @@ replace 会将所有重复的数据先删掉再插入，是肯定可以执行成
     (root@localhost) [test]> rollback;
     Query OK, 0 rows affected (0.00 sec)
 
-replace 是一个很好的语法，可以用来实现幂等
+replace 是一个很好的语法，可以用来实现[幂等](https://zh.wikipedia.org/wiki/%E5%86%AA%E7%AD%89)
 
 可以将所有的 insert、delete、update 语句都转化成 replace 语句，只要他没有唯一索引
 
 在做跨机房的复制的时候，可以考虑用 replace 迁移数据，将语句翻译成 replace 再去同步，这样做的好处是操作是幂等的，随便怎么执行执行多少次，出来的结果都是一样的，这是一个非常好的特性
 
 # 临时表
+
+    (root@localhost) [test]> drop tables a;
+    Query OK, 0 rows affected (0.00 sec)
 
     (root@localhost) [test]> create temporary table a ( a int );
     Query OK, 0 rows affected (0.00 sec)
@@ -406,7 +430,7 @@ replace 是一个很好的语法，可以用来实现幂等
     +----------------------------------+----------+
     7 rows in set (0.01 sec)
 
-在MySQL的数据文件目录下，有一个数据表文件 **ibtmp1**，叫临时表空间，在临时表中插入数据后这个数据表文件就会慢慢变大，数据库重启后这个文件会被删除重建
+在 MySQL 的数据文件目录下，有一个数据表文件 **ibtmp1**，叫临时表空间，在临时表中插入数据后这个数据表文件就会慢慢变大，数据库重启后这个文件会被删除重建
 
 同时创建临时表后，会在系统的 /tmp 目录下生成对应的临时表表结构文件，文件名类似 #sqlxxxxx.frm，而临时表的内容还是放在 MySQL 数据文件目录 ibtmp1 文件中
 
@@ -442,4 +466,4 @@ replace 是一个很好的语法，可以用来实现幂等
 
 应用端基本不用
 
-MySQL的存储过程性能很差
+MySQL 的存储过程性能比较差
