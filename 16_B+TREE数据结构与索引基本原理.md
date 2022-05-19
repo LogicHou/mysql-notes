@@ -105,7 +105,7 @@ explain 用来查看具体的执行计划
     (root@localhost) [dbt3]> select * from orders where o_orderdate = '1996-01-02';
     ...
     ...
-    637 rows in set (1.53 sec) <--满了很多 1.53/0.03 倍
+    637 rows in set (1.53 sec) <--慢了很多 1.53/0.03 倍
 
 由于没用使用到索引，这条SQL语句会被记录到慢查询日志当中：
 
@@ -126,7 +126,7 @@ explain 用来查看具体的执行计划
 
 ## mysqldumpslow 命令
 
-把对表的一些操作给格式化，比如将SQL语句中的 LIMIT 10 变成 LIMIT N
+把对表的一些操作给格式化，比如将 SQL 语句中的 LIMIT 10 变成 LIMIT N
 
     $ mysqldumpslow slow.log
 
@@ -147,7 +147,7 @@ explain 用来查看具体的执行计划
     $ tail -n 100000 slow.log > analytics.log
     $ mysqldumpslow analytics.log
 
-处理完慢日志查询后还要做一件事情，就是清理日志，以便确认慢查询会不会再次被记录进来，日志不推荐直接删除，如何清理日志前面的日记有提及(mv 备份文件然后在 MySQL 中 flush slow logs)
+处理完慢日志查询后还要做一件事情，就是清理日志，以便确认慢查询会不会再次被记录进来，日志不推荐直接删除，如何清理日志前面有提及(mv 备份文件然后在 MySQL 中 flush slow logs)
 
 接着如果调优基本上都完成的话，slow.log 应该是增长的非常慢的或者说基本上是不增长，如果再有增长的话就去 slow.log 里看
 
@@ -157,7 +157,7 @@ explain 用来查看具体的执行计划
 
 ### statement_analysis 表
 
-MySQL 5.6 5.7 开始 slow.log 有没有那种重要，或许还不一定，这个库中的 statement_analysis 表提供的数据比 slow.log 要更加直观，因为可以对很多维度来进行重新的排序，比如：
+这个库中的 statement_analysis 表提供的数据比 slow.log 要更加直观，因为可以对很多维度来进行重新的排序，比如：
 
 * 想知道哪条 SQL 语句查询的行数是最多的
 * 哪条 SQL 语句被锁住的时间是最多的
@@ -242,9 +242,9 @@ statement_analysis 这张表其实是一张视图，从 performance_schema 里�
 
 以前需要通过 slow.log 进行优化的手段，现在都可以通过 sys 库中的这几张表获得一些汇总信息，而 slow.log 则是一条条的记录
 
-如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
+MySQL 5.6 5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
 
-MySQL 并没有 sys 库，但是都是通过 performance_schema 中提取出来的，可以在一下链接中找到 sys_56.sql 文件生成视图
+MySQL5.6 并没有 sys 库，但是都是通过 performance_schema 中提取出来的，可以在一下链接中找到 sys_56.sql 文件生成视图
 
 https://github.com/mysql/mysql-sys
 
@@ -271,6 +271,95 @@ https://github.com/mysql/mysql-sys
 
 ## 通过一条 SQL 语句把当前线上所有的表都查一遍，然后找出没有主键的表
 
-
+    (root@localhost) [dbt3]> use information_schema;
+    Database changed
+    (root@localhost) [information_schema]> desc STATISTICS;
+    +---------------+---------------+------+-----+---------+-------+
+    | Field         | Type          | Null | Key | Default | Extra |
+    +---------------+---------------+------+-----+---------+-------+
+    | TABLE_CATALOG | varchar(512)  | NO   |     |         |       |
+    | TABLE_SCHEMA  | varchar(64)   | NO   |     |         |       |
+    | TABLE_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这2个配合实现
+    | NON_UNIQUE    | bigint(1)     | NO   |     | 0       |       |
+    | INDEX_SCHEMA  | varchar(64)   | NO   |     |         |       |
+    | INDEX_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这2个配合实现
+    | SEQ_IN_INDEX  | bigint(2)     | NO   |     | 0       |       |
+    | COLUMN_NAME   | varchar(64)   | NO   |     |         |       |
+    | COLLATION     | varchar(1)    | YES  |     | NULL    |       |
+    | CARDINALITY   | bigint(21)    | YES  |     | NULL    |       |
+    | SUB_PART      | bigint(3)     | YES  |     | NULL    |       |
+    | PACKED        | varchar(10)   | YES  |     | NULL    |       |
+    | NULLABLE      | varchar(3)    | NO   |     |         |       |
+    | INDEX_TYPE    | varchar(16)   | NO   |     |         |       |
+    | COMMENT       | varchar(16)   | YES  |     | NULL    |       |
+    | INDEX_COMMENT | varchar(1024) | NO   |     |         |       |
+    +---------------+---------------+------+-----+---------+-------+
+    16 rows in set (0.00 sec)
 
 ## 查询从来没有被使用过的索引
+
+    (root@localhost) [sys]> desc schema_unused_indexes;
+    +---------------+-------------+------+-----+---------+-------+
+    | Field         | Type        | Null | Key | Default | Extra |
+    +---------------+-------------+------+-----+---------+-------+
+    | object_schema | varchar(64) | YES  |     | NULL    |       |
+    | object_name   | varchar(64) | YES  |     | NULL    |       |
+    | index_name    | varchar(64) | YES  |     | NULL    |       |
+    +---------------+-------------+------+-----+---------+-------+
+    3 rows in set (0.00 sec)
+
+## 索引的第一个作用可以用来快速定位，第二个作用可以用来加速 order by
+
+如果要排序的话可以把 sort_buffer_size 参数值调大
+
+    (root@localhost) [dbt3]> select * from orders order by o_totalprice desc limit 10;
+    ...
+    ...
+    ...
+    10 rows in set (0.89 sec)
+
+    通过 explain 查看执行步骤：
+
+    (root@localhost) [dbt3]> explain select * from orders order by o_totalprice desc limit 10\G
+    *************************** 1. row ***************************
+              id: 1
+      select_type: SIMPLE
+            table: orders
+      partitions: NULL
+            type: ALL
+    possible_keys: NULL
+              key: NULL                <--没有使用到任何索引
+          key_len: NULL
+              ref: NULL
+            rows: 1493376
+        filtered: 100.00
+            Extra: Using filesort      <--发现一个Using filesort，表示需要排序，此时通过调大sort_buffer_size参数是有帮助的
+    1 row in set, 1 warning (0.00 sec)
+
+如果对这个列创建了一个索引可以加速 order by 操作：
+
+    (root@localhost) [dbt3]> alter table orders add index idx_o_totalprice(o_totalprice);
+    Query OK, 0 rows affected (4.70 sec)
+    Records: 0  Duplicates: 0  Warnings: 0
+
+    (root@localhost) [dbt3]> explain select * from orders order by o_totalprice desc limit 10\G
+    *************************** 1. row ***************************
+              id: 1
+      select_type: SIMPLE
+            table: orders
+      partitions: NULL
+            type: index
+    possible_keys: NULL
+              key: idx_o_totalprice     <--添加索引之后order by操作现在可以使用到创建的索引
+          key_len: 9
+              ref: NULL
+            rows: 10
+        filtered: 100.00
+            Extra: NULL                 <--并且在Extra这边就没有了Using filesort，此时不会使用到排序的内存了，就不需要再去调大sort_buffer_size参数了
+    1 row in set, 1 warning (0.00 sec)
+
+    (root@localhost) [dbt3]> select * from orders order by o_totalprice desc limit 10;
+    ...
+    ...
+    ...
+    10 rows in set (0.00 sec)
