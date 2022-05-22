@@ -46,7 +46,7 @@ explain 用来查看具体的执行计划
       partitions: NULL
             type: const
     possible_keys: PRIMARY
-              key: PRIMARY <--用到的索引
+              key: PRIMARY         <--这里用到了主键索引
           key_len: 4
               ref: const
             rows: 1
@@ -64,7 +64,7 @@ explain 用来查看具体的执行计划
       partitions: NULL
             type: ref
     possible_keys: i_o_orderdate
-              key: i_o_orderdate <--用到了普通索引
+              key: i_o_orderdate    <--用到了普通二级索引
           key_len: 4
               ref: const
             rows: 637
@@ -94,10 +94,10 @@ explain 用来查看具体的执行计划
       partitions: NULL
             type: ALL
     possible_keys: NULL
-              key: NULL <--没用用到索引
+              key: NULL         <--没用用到索引
           key_len: NULL
               ref: NULL
-            rows: 1488824 <--扫描的行数多了不止一点点
+            rows: 1488824       <--扫描的行数多了不止一点点
         filtered: 10.00
             Extra: Using where
     1 row in set, 1 warning (0.00 sec)
@@ -174,14 +174,14 @@ explain 用来查看具体的执行计划
                 query: SELECT * FROM `orders` WHERE `o_orderdate` = ? <--把之前的语句记录下来并且进行了格式化
                   db: dbt3
             full_scan: *
-          exec_count: 5 <--执行的次数是 5 次
+          exec_count: 5          <--执行的次数是 5 次
             err_count: 0
           warn_count: 0
-        total_latency: 5.35 s <--总执行时间
-          max_latency: 1.53 s <--最大执行时间
+        total_latency: 5.35 s    <--总执行时间
+          max_latency: 1.53 s    <--最大执行时间
           avg_latency: 1.07 s
         lock_latency: 4.07 s
-            rows_sent: 637 <--返回的行数
+            rows_sent: 637       <--返回的行数
         rows_sent_avg: 637
         rows_examined: 1500000
     rows_examined_avg: 1500000
@@ -234,15 +234,14 @@ statement_analysis 这张表其实是一张视图，从 performance_schema 里�
 
 基于其他维度统计的一些表：
 
-* statements_with_errors_or_warnings 报 error 和 warning 的
-* statements_with_full_table_scans   全表扫面没走索引的
-* statements_with_runtimes_in_95th_percentile
+* statements_with_errors_or_warnings 报 error 和 warning 的 SQL 语句有哪些
+* statements_with_full_table_scans   全表扫面或者没走索引的
 * statements_with_sorting 带有排序的
 * statements_with_temp_tables 带有临时表的
 
 以前需要通过 slow.log 进行优化的手段，现在都可以通过 sys 库中的这几张表获得一些汇总信息，而 slow.log 则是一条条的记录
 
-MySQL 5.6 5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
+MySQL 5.6，5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
 
 MySQL5.6 并没有 sys 库，但是都是通过 performance_schema 中提取出来的，可以在一下链接中找到 sys_56.sql 文件生成视图
 
@@ -269,20 +268,22 @@ https://github.com/mysql/mysql-sys
     delete_latency: 0 ps
     4 rows in set (0.00 sec)
 
-## 通过一条 SQL 语句把当前线上所有的表都查一遍，然后找出没有主键的表
+## 一些例行巡检脚本的实现
 
-    (root@localhost) [dbt3]> use information_schema;
-    Database changed
+### 通过一条 SQL 语句把当前线上所有的表都查一遍，然后找出没有主键的表
+
+通过对 information_schema 库中的 STATISTICS 和 TABLES 表进行关联查询可以实现：
+
     (root@localhost) [information_schema]> desc STATISTICS;
     +---------------+---------------+------+-----+---------+-------+
     | Field         | Type          | Null | Key | Default | Extra |
     +---------------+---------------+------+-----+---------+-------+
     | TABLE_CATALOG | varchar(512)  | NO   |     |         |       |
-    | TABLE_SCHEMA  | varchar(64)   | NO   |     |         |       |
-    | TABLE_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这2个配合实现
+    | TABLE_SCHEMA  | varchar(64)   | NO   |     |         |       |   <--通过这3个配合实现，库名
+    | TABLE_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这3个配合实现，表名
     | NON_UNIQUE    | bigint(1)     | NO   |     | 0       |       |
     | INDEX_SCHEMA  | varchar(64)   | NO   |     |         |       |
-    | INDEX_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这2个配合实现
+    | INDEX_NAME    | varchar(64)   | NO   |     |         |       |   <--通过这3个配合实现，索引名称
     | SEQ_IN_INDEX  | bigint(2)     | NO   |     | 0       |       |
     | COLUMN_NAME   | varchar(64)   | NO   |     |         |       |
     | COLLATION     | varchar(1)    | YES  |     | NULL    |       |
@@ -296,7 +297,52 @@ https://github.com/mysql/mysql-sys
     +---------------+---------------+------+-----+---------+-------+
     16 rows in set (0.00 sec)
 
-## 查询从来没有被使用过的索引
+    (root@localhost) [information_schema]> SELECT 
+        *
+    FROM
+        information_schema.TABLES t
+            LEFT JOIN
+        information_schema.STATISTICS s ON t.table_schema = s.table_schema
+            AND t.table_name = s.table_name
+            AND s.index_name = 'PRIMARY'
+    WHERE
+        t.table_schema NOT IN ('mysql' , 'performance_schema',
+            'information_schema',
+            'sys')
+            AND t.table_type = 'BASE TABLE'
+            AND s.index_name IS NULL;
+
+### 找出索引区分度小于 10% 的 SQL
+
+    (root@localhost) [information_schema]> SELECT 
+        CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) table_name,
+        INDEX_NAME,
+        CARDINALITY,
+        TABLE_ROWS,
+        CARDINALITY / TABLE_ROWS AS SELECTIVITY
+    FROM
+        information_schema.TABLES t,
+        (SELECT 
+            table_schema, table_name, index_name, cardinality
+        FROM
+            information_schema.STATISTICS
+        WHERE
+            (table_schema , table_name, index_name, seq_in_index) IN (SELECT 
+                    table_schema, table_name, index_name, seq_in_index
+                FROM
+                    information_schema.STATISTICS
+                WHERE
+                    seq_in_index = 1)) s
+    WHERE
+        t.table_schema = s.table_schema
+            AND t.table_name = s.table_name
+            AND t.table_rows != 0
+            AND t.table_schema NOT IN ('mysql' , 'performance_schema',
+            'information_schema',
+            'sys')
+    ORDER BY SELECTIVITY;
+
+### 查询从来没有被使用过的索引
 
     (root@localhost) [sys]> desc schema_unused_indexes;
     +---------------+-------------+------+-----+---------+-------+

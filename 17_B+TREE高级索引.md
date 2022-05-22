@@ -281,4 +281,95 @@ MySQL 目前存在的一个问题
 
 虚拟的列添加完之后是不占用任何存储空间的，每次访问虚拟列需要额外的一次计算得到，但是可以在这个列上添加索引，这个添加的索引是占用空间的，索引不是虚拟的是实际存在的，这个索引叫做函数索引，因为它是一个在函数计算出来的虚拟列上创建的索引
 
-现在为 orders 表添加一个虚拟的列
+现在为 orders 表添加一个虚拟的列：
+
+    (root@localhost) [dbt3]> ALTER TABLE orders ADD column o_orderdate2 INT AS (DATEDIFF('2099-01-01',o_orderdate)) VIRTUAL;
+    Query OK, 0 rows affected (2.42 sec)
+    Records: 0  Duplicates: 0  Warnings: 0
+
+    (root@localhost) [dbt3]> desc orders;
+    +-----------------+-------------+------+-----+---------+-------------------+
+    | Field           | Type        | Null | Key | Default | Extra             |
+    +-----------------+-------------+------+-----+---------+-------------------+
+    | o_orderkey      | int(11)     | NO   | PRI | NULL    |                   |
+    | o_custkey       | int(11)     | YES  | MUL | NULL    |                   |
+    | o_orderstatus   | char(1)     | YES  |     | NULL    |                   |
+    | o_totalprice    | double      | YES  | MUL | NULL    |                   |
+    | o_orderDATE     | date        | YES  | MUL | NULL    |                   |
+    | o_orderpriority | char(15)    | YES  |     | NULL    |                   |
+    | o_clerk         | char(15)    | YES  |     | NULL    |                   |
+    | o_shippriority  | int(11)     | YES  |     | NULL    |                   |
+    | o_comment       | varchar(79) | YES  |     | NULL    |                   |
+    | o_orderdate2    | int(11)     | YES  |     | NULL    | VIRTUAL GENERATED |
+    +-----------------+-------------+------+-----+---------+-------------------+
+    10 rows in set (0.00 sec)
+
+新添加了一个名为 o_orderdate2， 类型为 INT，并且 AS 后跟一个函数表达式的虚拟列，这个虚拟列是通过使用函数表达式 (DATEDIFF('2099-01-01',o_orderdate)) 计算日期差得到的，这样 o_orderdate2 就变成升序的了
+
+接着对为虚拟列创建索引：
+
+    (root@localhost) [dbt3]> ALTER TABLE orders ADD INDEX idx_cust_date_status (o_custkey,o_orderdate2,o_orderStatus);
+    Query OK, 0 rows affected (6.02 sec)
+    Records: 0  Duplicates: 0  Warnings: 0
+
+    (root@localhost) [dbt3]> show create table orders\G
+    *************************** 1. row ***************************
+          Table: orders
+    Create Table: CREATE TABLE `orders` (
+      `o_orderkey` int(11) NOT NULL,
+      `o_custkey` int(11) DEFAULT NULL,
+      `o_orderstatus` char(1) DEFAULT NULL,
+      `o_totalprice` double DEFAULT NULL,
+      `o_orderDATE` date DEFAULT NULL,
+      `o_orderpriority` char(15) DEFAULT NULL,
+      `o_clerk` char(15) DEFAULT NULL,
+      `o_shippriority` int(11) DEFAULT NULL,
+      `o_comment` varchar(79) DEFAULT NULL,
+      `o_orderdate2` int(11) GENERATED ALWAYS AS ((to_days('2099-01-01') - to_days(`o_orderDATE`))) VIRTUAL,                                            <--虚拟列
+      PRIMARY KEY (`o_orderkey`),
+      KEY `i_o_custkey` (`o_custkey`),
+      KEY `idx_o_totalprice` (`o_totalprice`),
+      KEY `idx_a_b_c` (`o_custkey`,`o_orderDATE`,`o_orderstatus`),
+      KEY `i_o_orderdate` (`o_orderDATE`),
+      KEY `idx_cust_date_status` (`o_custkey`,`o_orderdate2`,`o_orderstatus`)  <--虚拟列的索引
+    ) ENGINE=InnoDB DEFAULT CHARSET=latin1
+    1 row in set (0.00 sec)
+
+将原来的 SQL 语句：
+
+    (root@localhost) [dbt3]> EXPLAIN SELECT * FROM orders WHERE o_custkey = 1 ORDER BY o_orderDate desc ,o_orderStatus\G
+    *************************** 1. row ***************************
+              id: 1
+      select_type: SIMPLE
+            table: orders
+      partitions: NULL
+            type: ref
+    possible_keys: i_o_custkey,idx_a_b_c,idx_cust_date_status
+              key: i_o_custkey
+          key_len: 5
+              ref: const
+            rows: 6
+        filtered: 100.00
+            Extra: Using index condition; Using filesort
+    1 row in set, 1 warning (0.00 sec)
+
+改写为：
+
+    (root@localhost) [dbt3]> EXPLAIN SELECT * FROM orders WHERE o_custkey = 1 ORDER BY o_orderDate2 ,o_orderStatus\G
+    *************************** 1. row ***************************
+              id: 1
+      select_type: SIMPLE
+            table: orders
+      partitions: NULL
+            type: ref
+    possible_keys: i_o_custkey,idx_a_b_c,idx_cust_date_status
+              key: idx_cust_date_status
+          key_len: 5
+              ref: const
+            rows: 6
+        filtered: 100.00
+            Extra: Using where
+    1 row in set, 1 warning (0.00 sec)
+
+这样就变相实现了这个需求，这个方法只支持 5.7，5.6 并不支持函数索引
+
