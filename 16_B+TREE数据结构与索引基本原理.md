@@ -1,8 +1,10 @@
 # B+TREE数据结构与索引基本原理
 
-## explain 命令
+## Explain 命令
 
-explain 用来查看具体的执行计划
+### 最简单的一种场景
+
+Explain 用来查看具体的执行计划
 
     (root@localhost) [dbt3]> show create table orders\G
     *************************** 1. row ***************************
@@ -17,13 +19,13 @@ explain 用来查看具体的执行计划
       `o_clerk` char(15) DEFAULT NULL,
       `o_shippriority` int(11) DEFAULT NULL,
       `o_comment` varchar(79) DEFAULT NULL,
-      PRIMARY KEY (`o_orderkey`),           <--主键索引
-      KEY `i_o_orderdate` (`o_orderDATE`),  <--普通索引
-      KEY `i_o_custkey` (`o_custkey`)       <--普通索引
+      PRIMARY KEY (`o_orderkey`),              <--主键索引
+      KEY `i_o_orderdate` (`o_orderDATE`),     <--普通索引
+      KEY `i_o_custkey` (`o_custkey`)          <--普通索引
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     1 row in set (0.00 sec)
 
-查看语句的执行计划使用了哪一个索引，最简单的一种场景：
+查看语句的执行计划使用了哪一个索引：
 
     (root@localhost) [dbt3]> select * from orders where o_orderkey = 1\G
     *************************** 1. row ***************************
@@ -64,7 +66,7 @@ explain 用来查看具体的执行计划
       partitions: NULL
             type: ref
     possible_keys: i_o_orderdate
-              key: i_o_orderdate    <--用到了普通二级索引
+              key: i_o_orderdate    <--用到了普通二级索引，相对主键索引查询是要比较慢的，因为还要往后进行扫描
           key_len: 4
               ref: const
             rows: 637
@@ -86,7 +88,6 @@ explain 用来查看具体的执行计划
 
     # 再次查看执行计划
     (root@localhost) [dbt3]> explain select * from orders where o_orderdate = '1996-01-02'\G
-    explain select * from orders where o_orderdate = '1996-01-02'\G
     *************************** 1. row ***************************
               id: 1
       select_type: SIMPLE
@@ -110,23 +111,32 @@ explain 用来查看具体的执行计划
 由于没用使用到索引，这条SQL语句会被记录到慢查询日志当中：
 
     # Time: 2022-03-14T17:47:45.903876+08:00
-    774 # User@Host: root[root] @ localhost []  Id:     3
-    775 # Query_time: 1.539316  Lock_time: 0.004656 Rows_sent: 637 <--返回了 637 条记录  Rows_examined: 1500000 <--共检查了 150 万行记录
-    776 use dbt3;
-    777 SET timestamp=1647251265;
-    778 select * from orders where o_orderdate = '1996-01-02';
+    # User@Host: root[root] @ localhost []  Id:     3
+    # Query_time: 1.539316  Lock_time: 0.004656 Rows_sent: 637 <--返回了 637 条记录  Rows_examined: 1500000           <--共检查了 150 万行记录
+    use dbt3;
+    SET timestamp=1647251265;
+    select * from orders where o_orderdate = '1996-01-02';
 
-再次提醒，线上大部分调优的工作，都是看 slow.log
+再次提醒，线上大部分调优的工作，都是看 slow.log，调优的过程基本就是把 slow.log 里的慢查询 SQL 语句找出来去 MySQL 命令行中加上 explain 去查看，然后根据情况进行调优
 
 把索引加回来：
 
     (root@localhost) [dbt3]> alter table orders add index i_o_orderdate(o_orderdate);
-    Query OK, 0 rows affected (4.37 sec) <--150 万行记录的表用了 4.37 秒，可以记住来当作一个指标，根据服务器环境不同会有所上下浮动
+    Query OK, 0 rows affected (4.37 sec)  <--150 万行记录的表用了 4.37 秒，可以记住来当作一个指标，根据服务器环境不同会有所上下浮动
     Records: 0  Duplicates: 0  Warnings: 0
 
 ## mysqldumpslow 命令
 
-把对表的一些操作给格式化，比如将 SQL 语句中的 LIMIT 10 变成 LIMIT N
+把对表的一些操作给格式化，这个格式化就是说在日志文件中会有很多只是查询条件内容不同，其他部分都相同的 SQL 语句，把它们查询条件内容部分格式化成某个字符，比如：
+
+    select * from orders where o_orderdate = '1996-01-02';
+    select * from orders where o_orderdate = '1996-02-02';
+    select * from orders where o_orderdate = '1996-03-02';
+
+    # 会格式化归类为一条语句
+    select * from orders where o_orderdate = 'S'
+
+又比如将 SQL 语句中的 LIMIT 10 变成 LIMIT N
 
     $ mysqldumpslow slow.log
 
@@ -136,18 +146,20 @@ explain 用来查看具体的执行计划
       FROM
       lineitem
       ORDER BY l_discount
-      LIMIT N <--这里进行了格式化
+      LIMIT N             <--这里进行了格式化
 
 这个命令默认是根据执行时间 Query time 来进行排序的，可以修改，具体命令可以查看此命令的帮助：
 
     $ mysqldumpslow --help
 
-这个命令对于解析大的(几个G) slow.log 依然是很慢的，这时候可以用到采样，只要使用了慢查询日志，记录到里面的所有查询都是重复的，既然是重复的话只要看最后一段时间的就可以了
+这个命令对于解析大的(几个G) slow.log 依然是很慢的，这时候可以用到采样
+
+只要使用了慢查询日志，记录到里面的所有查询都是重复的，既然是重复的话只要用 [tail](https://www.runoob.com/linux/linux-comm-tail.html) 命令采样靠后一些的内容来分析就可以了
 
     $ tail -n 100000 slow.log > analytics.log
     $ mysqldumpslow analytics.log
 
-处理完慢日志查询后还要做一件事情，就是清理日志，以便确认慢查询会不会再次被记录进来，日志不推荐直接删除，如何清理日志前面有提及(mv 备份文件然后在 MySQL 中 flush slow logs)
+处理完慢日志查询后还要做一件事情，就是清理日志，以便确认慢查询会不会再次被记录进来，日志不推荐直接删除，如何清理日志前面有提及(mv slow.log 备份文件然后在 MySQL 中 flush slow logs)
 
 接着如果调优基本上都完成的话，slow.log 应该是增长的非常慢的或者说基本上是不增长，如果再有增长的话就去 slow.log 里看
 
@@ -230,18 +242,18 @@ x$ 开头的 statement_analysis 表内数据除了 SQL 语句其他的不提供�
 
 statement_analysis 这张表其实是一张视图，从 performance_schema 里面的 events_statements_summary_by_digest 这张表中根据总的等待时间从大到小排序然后取得的
 
-总体来说，sys 库下面的所有表可以认为都是视图，是用来方便的进行统计的
+总体来说，sys 库下面的所有表可以认为都是视图，是用来方便进行统计的
 
 基于其他维度统计的一些表：
 
 * statements_with_errors_or_warnings 报 error 和 warning 的 SQL 语句有哪些
 * statements_with_full_table_scans   全表扫面或者没走索引的
-* statements_with_sorting 带有排序的
-* statements_with_temp_tables 带有临时表的
+* statements_with_sorting            带有排序的
+* statements_with_temp_tables        带有临时表的
 
 以前需要通过 slow.log 进行优化的手段，现在都可以通过 sys 库中的这几张表获得一些汇总信息，而 slow.log 则是一条条的记录
 
-MySQL 5.6，5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
+MySQL5.6，5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
 
 MySQL5.6 并没有 sys 库，但是都是通过 performance_schema 中提取出来的，可以在一下链接中找到 sys_56.sql 文件生成视图
 
@@ -261,7 +273,7 @@ https://github.com/mysql/mysql-sys
     rows_selected: 0              <--执行的次数是多少
     select_latency: 0 ps          <--查询的时间是多少
     rows_inserted: 0              <--往下看，增删查改都有
-    insert_latency: 0 ps
+    insert_latency: 0 ps          <--增
       rows_updated: 0
     update_latency: 0 ps
       rows_deleted: 0
@@ -353,6 +365,8 @@ https://github.com/mysql/mysql-sys
     | index_name    | varchar(64) | YES  |     | NULL    |       |
     +---------------+-------------+------+-----+---------+-------+
     3 rows in set (0.00 sec)
+    
+    (root@localhost) [sys]> select * from schema_unused_indexes;
 
 ## 索引的第一个作用可以用来快速定位，第二个作用可以用来加速 order by
 
