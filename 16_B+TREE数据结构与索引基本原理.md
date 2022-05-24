@@ -106,13 +106,13 @@ Explain 用来查看具体的执行计划
     (root@localhost) [dbt3]> select * from orders where o_orderdate = '1996-01-02';
     ...
     ...
-    637 rows in set (1.53 sec) <--慢了很多 1.53/0.03 倍
+    637 rows in set (1.53 sec)  <--慢了很多 1.53/0.03 倍
 
 由于没用使用到索引，这条SQL语句会被记录到慢查询日志当中：
 
     # Time: 2022-03-14T17:47:45.903876+08:00
     # User@Host: root[root] @ localhost []  Id:     3
-    # Query_time: 1.539316  Lock_time: 0.004656 Rows_sent: 637 <--返回了 637 条记录  Rows_examined: 1500000           <--共检查了 150 万行记录
+    # Query_time: 1.539316  Lock_time: 0.004656 Rows_sent: 637 <--返回了 637 条记录  Rows_examined: 1500000                     <--共检查了 150 万行记录
     use dbt3;
     SET timestamp=1647251265;
     select * from orders where o_orderdate = '1996-01-02';
@@ -324,36 +324,6 @@ https://github.com/mysql/mysql-sys
             AND t.table_type = 'BASE TABLE'
             AND s.index_name IS NULL;
 
-### 找出索引区分度小于 10% 的 SQL
-
-    (root@localhost) [information_schema]> SELECT 
-        CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) table_name,
-        INDEX_NAME,
-        CARDINALITY,
-        TABLE_ROWS,
-        CARDINALITY / TABLE_ROWS AS SELECTIVITY
-    FROM
-        information_schema.TABLES t,
-        (SELECT 
-            table_schema, table_name, index_name, cardinality
-        FROM
-            information_schema.STATISTICS
-        WHERE
-            (table_schema , table_name, index_name, seq_in_index) IN (SELECT 
-                    table_schema, table_name, index_name, seq_in_index
-                FROM
-                    information_schema.STATISTICS
-                WHERE
-                    seq_in_index = 1)) s
-    WHERE
-        t.table_schema = s.table_schema
-            AND t.table_name = s.table_name
-            AND t.table_rows != 0
-            AND t.table_schema NOT IN ('mysql' , 'performance_schema',
-            'information_schema',
-            'sys')
-    ORDER BY SELECTIVITY;
-
 ### 查询从来没有被使用过的索引
 
     (root@localhost) [sys]> desc schema_unused_indexes;
@@ -370,15 +340,15 @@ https://github.com/mysql/mysql-sys
 
 ## 索引的第一个作用可以用来快速定位，第二个作用可以用来加速 order by
 
-如果要排序的话可以把 sort_buffer_size 参数值调大
+前面介绍过调大 sort_buffer_size 参数对排序是有帮助的：
 
     (root@localhost) [dbt3]> select * from orders order by o_totalprice desc limit 10;
     ...
     ...
     ...
-    10 rows in set (0.89 sec)
+    10 rows in set (1.17 sec)  <--这里需要1.17秒，对查询10条数据来说不算快
 
-    通过 explain 查看执行步骤：
+通过 explain 查看执行步骤：
 
     (root@localhost) [dbt3]> explain select * from orders order by o_totalprice desc limit 10\G
     *************************** 1. row ***************************
@@ -396,7 +366,7 @@ https://github.com/mysql/mysql-sys
             Extra: Using filesort      <--发现一个Using filesort，表示需要排序，此时通过调大sort_buffer_size参数是有帮助的
     1 row in set, 1 warning (0.00 sec)
 
-如果对这个列创建了一个索引可以加速 order by 操作：
+对需要排序的列创建了一个索引也可以加速 order by 操作：
 
     (root@localhost) [dbt3]> alter table orders add index idx_o_totalprice(o_totalprice);
     Query OK, 0 rows affected (4.70 sec)
@@ -422,4 +392,4 @@ https://github.com/mysql/mysql-sys
     ...
     ...
     ...
-    10 rows in set (0.00 sec)
+    10 rows in set (0.00 sec)            <--查询排序的数据变得很快了
