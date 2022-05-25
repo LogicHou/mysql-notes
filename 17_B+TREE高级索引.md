@@ -333,8 +333,18 @@ MySQL 目前存在的一个问题
 
     (root@localhost) [dbt3]> EXPLAIN SELECT * FROM orders WHERE o_custkey = 1 ORDER BY o_orderDate DESC,o_orderStatus\G
     *************************** 1. row ***************************
-      ...
-            Extra: Using index condition; Using filesort <--改成o_orderDate DESC条件后，再次出现了Using filesort
+              id: 1
+      select_type: SIMPLE
+            table: orders
+      partitions: NULL
+            type: ref
+    possible_keys: i_o_custkey,idx_a_b_c,idx_cust_date_status
+              key: i_o_custkey
+          key_len: 5
+              ref: const
+            rows: 6
+        filtered: 100.00
+            Extra: Using index condition; Using filesort   <--改成o_orderDate DESC条件后，再次出现了Using 
     1 row in set, 1 warning (0.00 sec)
 
 在 5.7 中创建 (A,B,C) 这样的复合索引它的排序规则都是升序的 (A asc,B asc,C asc)，如果这时 B desc (A asc,B desc,C asc) 就不能使用到这个复合索引就又要再一次进行排序(Using filesort)了，所以这是 5.7 中一个比较大的问题
@@ -442,23 +452,9 @@ MySQL 目前存在的一个问题
     ) ENGINE=InnoDB DEFAULT CHARSET=latin1
     1 row in set (0.00 sec)
 
-将那个逆序查询的 SQL 语句：
+将那条逆序查询的 SQL 语句：
 
     (root@localhost) [dbt3]> EXPLAIN SELECT * FROM orders WHERE o_custkey = 1 ORDER BY o_orderDate DESC,o_orderStatus\G
-    *************************** 1. row ***************************
-              id: 1
-      select_type: SIMPLE
-            table: orders
-      partitions: NULL
-            type: ref
-    possible_keys: i_o_custkey,idx_a_b_c,idx_cust_date_status
-              key: i_o_custkey
-          key_len: 5
-              ref: const
-            rows: 6
-        filtered: 100.00
-            Extra: Using index condition; Using filesort   <--用到了Using filesort
-    1 row in set, 1 warning (0.00 sec)
 
 改写为：
 

@@ -41,12 +41,14 @@
     2 rows in set (0.00 sec)
 
     # 查看相关性
-    mysql> SELECT id, body, MATCH (title,body) AGAINST
-        ('Security implications of running MySQL as root'
-        IN NATURAL LANGUAGE MODE) AS score
-        FROM articles WHERE MATCH (title,body) AGAINST
-        ('Security implications of running MySQL as root'
-        IN NATURAL LANGUAGE MODE);
+    mysql> SELECT 
+        id,
+        body,
+        MATCH (title , body) AGAINST ('Security implications of running MySQL as root' IN NATURAL LANGUAGE MODE) AS score
+    FROM
+        articles
+    WHERE
+        MATCH (title , body) AGAINST ('Security implications of running MySQL as root' IN NATURAL LANGUAGE MODE);
     +----+-------------------------------------+-----------------+
     | id | body                                | score           |
     +----+-------------------------------------+-----------------+

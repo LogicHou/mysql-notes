@@ -2,15 +2,15 @@
 
 ## 索引倾斜
 
-很多时候我们喜欢去 status 这种字段上创建索引，按照高选择性原则，索引要创建在这个高选择性的列上，status 通常来说就几种有限的状态比如0，1，2
+很多时候我们喜欢去 status 这类字段上创建索引，status 通常来说就几种有限的状态比如 0，1，2，其中大部分的订单状态都是已完成的状态，这就会导致一个叫做索引倾斜的问题
 
-这会存在一种叫做倾斜的问题，也就是说大部分的订单状态都是已完成的状态，但是 SQL 条件去查的时候大部分都是差未完成的订单，而这种未完成的状态却又是很少量的。比如说 1000w 的一张表可能未完成的订单只有 10w，如果去取未完成的订单的话就符合B+树索引的一个条件，就是去大量的数据中去取少量的数据
+我们去查询的时候大部分都是查未完成的订单，而这种未完成的状态却又是很少量的，比如说 1000w 的一张表可能未完成的订单只有 10w，如果去取未完成的订单的话就符合 B+ 树索引的一个条件，就是去大量的数据中去取少量的数据，这就是索引倾斜
 
-这就是索引倾斜，0 1 2 三个状态每种就是 1/3 的状态，其中 0 这种状态只占 1% 的数据，如果要查的就是这 1% 的数据，这时候去 status 上创建索引就是有意义的，因为你是取小部分的数据
+0 1 2 三个状态，假设其中 0 这种状态只占 1% 的数据，如果要查的就是这 1% 的数据，这时候去 status 上创建索引就是有意义的，因为你是取小部分的数据
 
 但是这时候如果去做一些比较复杂的查询的话，explain 优化器不能感知到倾斜的问题可能会出错，它并不知道你的索引是倾斜的从而导致它在选择上可能会有一些问题。如果在日常开发中优化器的执行计划出现了一些小小的偏差，那么可以去看一下它使用的索引是哪个索引，然后是否存在倾斜的情况
 
-## 强制使用某个索引
+### 强制使用某个索引
 
     (root@localhost) [dbt3]> explain select * from lineitem where l_orderkey = 1\G
     *************************** 1. row ***************************
@@ -19,7 +19,7 @@
             table: lineitem
       partitions: NULL
             type: ref
-    possible_keys: PRIMARY,i_l_orderkey,i_l_orderkey_quantity  <--这里用到了3个索引
+    possible_keys: PRIMARY,i_l_orderkey,i_l_orderkey_quantity  <--表示可能用到的3个索引
               key: PRIMARY                                     <--优化器选择了使用主键作为索引
           key_len: 4
               ref: const
@@ -28,7 +28,7 @@
             Extra: NULL
     1 row in set, 1 warning (1.01 sec)
 
-这个例子比较简单通常来说不会出错，但如果是一些包含 group by， join 语句的比较复杂的例子可能就会出错，这时候可以使用 force index 去强制使用一个指定的索引
+这个例子比较简单通常来说不会出错，但如果是一些包含 group by， join 语句的比较复杂的例子可能就会出错，这时候可以使用 **force index** 去强制使用一个指定的索引
 
     (root@localhost) [dbt3]> explain select * from lineitem force index(i_l_orderkey) where l_orderkey = 1\G
     *************************** 1. row ***************************
@@ -38,7 +38,7 @@
       partitions: NULL
             type: ref
     possible_keys: i_l_orderkey
-              key: i_l_orderkey   <--优化器此时强制去使用了i_l_orderkey作为索引
+              key: i_l_orderkey     <--优化器此时强制去使用了i_l_orderkey作为索引
           key_len: 4
               ref: const
             rows: 6
@@ -46,9 +46,17 @@
             Extra: NULL
     1 row in set, 1 warning (0.00 sec)
 
-大部分的场景不需要使用到这个 force index，但是碰到索引倾斜时，确认所有的查询都是走某个索引会更快的情况下，的确就可以去 force index 一下
+如果真的碰到索引倾斜，确认所有的查询都是走另外的索引会更快的情况下，的确就可以去 force index 一下，但是大部分的场景不需要使用到这个 force index(hint)，而且要去强制使用索引还是因为索引本身是存在倾斜的本身数据里有些错误，也不能说是优化器出错
+
+建议这种提示性 hint 写得越少越好
 
 ## SQL JOIN 算法
+
+对于单条语句，用 explain 看使用到的 key 也都能分析得差不多了
+
+如果是有多个条件的话加复合索引，多个条件再去 order by 就把 order by 的列加入复合索引，这样 Extra 这个选项就不会出现 filesort 排序的提示
+
+这些都是比较基本的，线上还会出现一些 JOIN 复杂的查询，这时就需要了解 JOIN 算法的问题
 
 ### nested_loop join 嵌套查询
 
@@ -65,11 +73,11 @@
 
 这种算法的扫描成本是 O(Rn X Sn)，非常低效
 
-MySQL 中永远不会使用这种算法 
+**MySQL 中永远不会使用这种算法**
 
 #### index nested_loop join 基于索引的嵌套查询
 
-最推荐的嵌套查询算法
+最推荐的嵌套查询 JOIN 算法
 
 算法：
 
@@ -84,18 +92,19 @@ R 表可以称为驱动表（外表），S 表可以称为被驱动表（内表�
 
 这种算法的扫描成本是 O(Rn)，也就是外表的行数的扫描次数
 
-那么如果是 A B 表进行关联，那么 A 表是 R 表，还是 B 表是 R 表
+那么如果是 A 和 B 表进行关联，那么 A 表是 R 表，还是 B 表是 R 表
 
 对于 inner join 来说，A join B 和 B join A 其实结果都是一样的，通常来说只要你的驱动表越小优化器就倾向于使用小表作为驱动表
 
-比如说一张 10w 的表和一张 100w 的表进行 join，优化器倾向于使用 10w 来作为外表，然后为 100w 大表上需要去 join 的列创建索引。这时候扫描次数是 10w * 3 次，但是如果将 100w 作为外表，那么扫描次数就变成了100w * 3，明显比 10w 作为外表大多了，这就是为什么优化器倾向于使用小表作为驱动表。
+比如说一张 10w 的表和一张 100w 的表进行 join，优化器倾向于使用 10w 的小表来作为外表，然后为 100w 大表上需要去 join 的列创建索引。如果索引高度为3，这时候扫描次数是 10w * 3 = 30万次，但是如果将 100w 作为外表，那么扫描次数就变成了100w * 3 = 300万次，明显比 10w 作为外表大多了，这就是为什么优化器倾向于使用小表作为驱动表
 
 对于 MySQL 来说只要两张表进行关联的话，非常建议两张表上面一定要去创建索引，**而且此时索引应该创建在比较大的那张表也就是内表 S 上**
 
-需要注意的是在线上的话不会是直接两张表去关联而不带其他附加过滤条件的，优化器会把 where 后面的过滤条件也考虑进去，然后考虑过这些 where 后面的条件之后，再判断哪张表作为驱动表，那张表作为内表，但是所有有倾斜的话这里还是很容易出错
+需要注意的是在线上的话不会是直接两张表去关联而不带其他附加过滤条件的，优化器会把 where 后面的过滤条件也考虑进去，然后看经过这些条件过滤条件之后，再判断哪张表作为驱动表，那张表作为内表，但是索引有倾斜的话在索引顺序的选择上还是很容易出错
 
 #### block nested_loop join 基于块的嵌套查询
 
+* 两张表上没有索引的时候触发
 * 优化 simple nested_loop join 
 * 减少内部表的扫描次数
 
@@ -107,23 +116,43 @@ R 表可以称为驱动表（外表），S 表可以称为被驱动表（内表�
 
 原理是通过加入内存 join_buffer 用空间换时间，系统变量 join_buffer_size 决定了 join_buffer 的大小
 
-join_buffer 可被用于联接是 All，index，range 的类型
+join_buffer 可被用于连接是 All，index，range 的类型
 
-join_buffer 只存储需要进行查询操作的相关列数据，**而不是整行的记录**
+join_buffer 只存储需要进行查询操作的相关列数据，**而不是整行的记录**，整体来说还是比较高效的
 
-join_buffer_size 建议设置到 1G 就差不多了
+join_buffer_size 建议最大设置到 1G 就差不多了
 
-首先对于外表要关联的这些列并不直接去一行一行进行比较，现在是把 R 中的关联列全部放到 join_buffer 里面，然后一次性的和内表 S 中的列数据进行比较，这样就能减少内部表的扫描次数
+对于外表要关联的这些列并不直接去一行一行进行比较，现在是把 R 中的关联列(不是整行记录)全部放到 join_buffer 里面（如果能全部放下的话就一次全放进去），然后一次性的和内表 S 中的列数据进行比较，这样就能减少内表的扫描次数
 
 如果 join_buffer_size 设置的足够大能够把驱动表中的所有列都能 cache 起来的话，那么只需要扫描 1 次内表
 
 如果 join 已经使用了索引，那么再加大 join_buffer_size 也是没有意义的，网上搜到的某些的为了提高 join 性能而盲目的加大 join_buffer_size 显然不完全是对的
 
-MySQL 中建议两张表关联的话一定要加索引，如果分不清哪张作为驱动表，哪张作为内表的时候，就干脆简单点两张表都加索引
+**MySQL 中建议两张表关联的话一定要加索引，如果分不清哪张作为驱动表，哪张作为内表的时候，就干脆简单点两张表都加索引**
 
-#### batched key access join 
+#### SNLP BNLP 表扫描次数比较
 
-bka join 是用来解决如果关联的列是二级索引的时候，对回表的列进行一个 MRR 排序操作，它会先 cache 起来再进行回表，此时的回表就会变得比较顺序性能就会变得比较好
+数据模型(假设 join_buffer 值足够大)：
+
+    A表   B表
+    1     1
+    2     2
+    3     3
+          4
+
+|              | SNLP | BNLP |
+| ------------ | ---- | ---- |
+| 外表扫描次数 | 1    | 1    |
+| 内表扫描次数 | 3    | 1    |
+| 比较次数     | 12   | 12   |
+
+注意 BNLP 算法中，是 join_buffer 的数据和 B 表中的每个数据进行比较，比如(123)和1、(123)和2比较以此类推，所以还是 12 次 
+
+比较次数并没有省下来，但是内表扫描次数缩小到了 1 次，数据量小的时候可能还没有什么感觉，但假设 A B 表都是百万级别的这时候 BNLP 的性能就会好非常多了。百万级别没有索引的话通过 BNLP 算法 MySQL 还是勉强能跑出来的，除了加索引优化的方法是加大 join_buffer_size，由于只是把 R 中的关联列(不是整行记录)放入 join_buffer，所以整体来说还是比较高效的
+
+#### batched key access join
+
+bka join 是用来解决如果关联的列是二级索引的时候，会对回表的列进行一个 MRR 排序操作，它会先 cache 起来再进行回表，此时的回表就会变得比较顺序性能就会变得比较好
 
 因为 bka 调用的是 MRR 的接口，所以 join 算法默认是不会启用的，如果要启用的话需要写相关的 [hint](https://dev.mysql.com/doc/refman/5.7/en/optimizer-hints.html#optimizer-hints-table-level) ：
 
@@ -131,6 +160,8 @@ bka join 是用来解决如果关联的列是二级索引的时候，对回表�
     SELECT /*+ NO_BNL() BKA(t1) */ t1.* FROM t1 INNER JOIN t2 INNER JOIN t3;
 
 这也是 MySQL 现在比较大的问题，那为什么还有这么多人用 MySQL 呢？主要是因为在线业务(OLTP)都是一些比较简单的查询，OLTP 的业务也不推荐使用很多的 join 操作
+
+MySQL 也不是很适合做 OLAP 的业务，所以不推荐用 MySQL 来做 OLAP 的业务
 
 ## 一个可能用不到索引的例子
 
@@ -144,15 +175,15 @@ bka join 是用来解决如果关联的列是二级索引的时候，对回表�
       partitions: NULL
             type: ALL
     possible_keys: i_o_orderdate        <--对于orderdate实际上是有索引的
-              key: NULL                 <--但是优化器并没有使用索引
+              key: NULL                 <--但是优化器并没有选择使用索引定位，而是强制扫所有的数据，然后通过where来进行过滤
           key_len: NULL
               ref: NULL
             rows: 1493376
         filtered: 18.52
-            Extra: Using where          <--只通过where进行了过滤，由于i_o_orderdate是一个二级索引，所以这里需要回表
+            Extra: Using where          <--只通过where进行了过滤，由于i_o_orderdate是一个二级索引，走索引需要回表带来额外的开销，所以优化器这里选择不走索引而是选择了扫描全表(会用到主键)
     1 row in set, 1 warning (0.00 sec)
 
-查询条件改成 o_orderdate > '1999-01-01 会发现优化器会去使用索引，这样一下用到索引一下用不到索引并不代表 MySQL 优化器不稳定，恰恰相反的是这说明 MySQL 优化器很聪明
+查询条件改成 o_orderdate > '1999-01-01 会发现优化器会去使用索引
 
     (root@localhost) [dbt3]> explain select * from orders where o_orderdate > '1999-01-01'\G
     *************************** 1. row ***************************
@@ -161,24 +192,26 @@ bka join 是用来解决如果关联的列是二级索引的时候，对回表�
             table: orders
       partitions: NULL
             type: range
-    possible_keys: i_o_orderdate        <--这里用到了索引
-              key: i_o_orderdate
+    possible_keys: i_o_orderdate
+              key: i_o_orderdate        <--这里用到了索引，这里数据量小使用二级索引代价更小，所以优化器选择了是用索引，但是如果数据量大的情况下，使用索引产生大量的回表操作就不划算了
           key_len: 4
               ref: NULL
-            rows: 1                     <--只有1条数据需要扫描，所有肯定是走索引比较快
+            rows: 1                     <--只有1条数据需要扫描
         filtered: 100.00
             Extra: Using index condition
     1 row in set, 1 warning (0.00 sec)
 
-这里的 o_orderdate 其实是一个二级索引 KEY \`i_o_orderdate\` (\`o_orderDATE\`) 并且是 select *，所以 o_orderdate > '1998-01-01' 例子中需要回表
+这样一下用到索引一下用不到索引并不代表 MySQL 优化器不稳定，恰恰相反的是这说明 MySQL 优化器很聪明
+
+导致这个现象的原因是因为这里的 o_orderdate 其实是一个二级索引 KEY \`i_o_orderdate\` (\`o_orderDATE\`) 并且是 select *，所以 o_orderdate > '1998-01-01' 例子中需要回表
 
 通过一个数据模型来分析一下这个问题产生的原因，假设对订单表的某个查询条件匹配的是 150w 个记录且每行的记录大小是 100 个字节，现在通过 order_date 来过滤的话优化器预估出来的行数是 50 万行，意味着就要回表 50w 次 IO。这还不一定准确，因为如果此时的 B+树高度为 3，那么就需要回表 150w 次 IO
 
 如果不走 order_date 索引，直接去扫描 150w 行的主键，那么只需要 150w 除以每个叶能存放的记录 (16k / 100字节) 次数的 IO，这样肯定是小于 150w 次
 
-而且主键扫描基本上可以认为是一个顺序 IO，而回表 IO 则是随机的，随机 IO 比顺序 IO 慢至少有 10 倍
+而且主键扫描基本上可以认为是一个顺序 IO，而回表 IO 则是随机的，随机 IO 比顺序 IO 慢可能至少有 10 倍
 
-所以这个时候使用主键扫描肯定会比较快，MySQL 优化器会自动根据这样的 Cost 判断使用哪种方法去进行扫描
+所以 '1999-01-01' 这个例子使用主键扫描肯定会比较快，MySQL 优化器会自动根据这样的 cost 成本判断使用哪种方法去进行扫描
 
 简单来说就是这个模型下面，走主键扫描会比走索引回表扫描的数据量更小也就更快更效率，这就是这个问题产生的原因
 
@@ -202,7 +235,7 @@ bka join 是用来解决如果关联的列是二级索引的时候，对回表�
             Extra: Using index condition; Using MRR    <--提示用到了MRR
     1 row in set, 1 warning (0.00 sec)
 
-MRR 也是通过空间换时间，会新开一块内存，用来存放每次回表的一个主键值，等放不下了就会去进行一次 sort 操作， 排序完之后再去进行回表，这个时候去进行回表操作它的 IO 就会变得比较顺序了，然是依然是需要很多的 IO 的这个避免不了。这样就是通过随机转顺序的方式来做了一个优化。
+MRR 也是通过空间换时间，会新开一块内存用来存放每次回表的一个主键值，等放不下了就会去进行一次 sort 操作，排序完之后再去进行回表，这个时候去进行回表操作它的 IO 就会变得比较顺序了，然是依然是需要很多的 IO 的这个避免不了。这样就是通过随机转顺序的方式来做了一个优化。
 
     (root@localhost) [dbt3]> select /*+ MRR(orders) */ * from orders where o_orderdate > '1998-01-01'\G
     ...
@@ -215,9 +248,9 @@ MRR 有个比较遗憾的点就是优化器永远不会主动去选择 MRR
 
 ## join 和索引的关系
 
-有索引的话千万级别的 join 其实也是可以的，但的确速度会很慢
+有索引的话千万级别的 join 其实也是可以的不至于不行，但速度的确会很慢
 
-join 的时候 join 的列是二级索引就会需要回表，用下面的语句举个例子：
+导致缓慢的原因是 join 的时候 join 的列如果是**二级索引**就需要回表，用下面的语句举个例子：
 
     (root@localhost) [dbt3]> SELECT 
         MAX(l_extendedprice)
@@ -230,13 +263,21 @@ join 的时候 join 的列是二级索引就会需要回表，用下面的语句
             
     set optimizer_switch='batched_key_access=on,mrr_cost_based=off';
 
-订单表 orders 和 订单明细表 lineitem 进行关联，关联的条件是订单ID l_orderkey = o_orderkey，由于用的 l_orderkey 是二级索引，也就是说 lineitem 这张表是内表，内表上有这样的一个索引来进行关联，但是这个索引是二级索引，二级索引关联比较是没有问题，比较完通过索引来快速定位之后，要查 l_extendedprice 就需要回表
+订单表 orders 和 订单明细表 lineitem 进行关联，关联的条件是订单ID l_orderkey = o_orderkey，由于用的 l_orderkey 是二级索引，也就是说 lineitem 这张表是内表，内表上有这样的一个索引来进行关联，但是这个索引是二级索引，二级索引关联比较是没有问题，比较完通过索引来快速定位之后，要查 l_extendedprice 就还需要回表
+
+关联主键的话不需要回表，代价就小多了
 
 ## hash join (MySQL5.+现在是不支持的)
 
 hash join 也是先将外表中的数据先放到内存里去，放进去之后并不直接通过 join buffer 和内表去直接进行比较，而是对 join buffer 中的列去创建了一张哈希表，然后在扫描内表，内表中的每条记录去探测这张哈希表，这就是 hash join 最基本的一个原理
 
-因为哈希的这个算法，通常假设某一条记录从哈希表中进行寻找的话它的成本只需要一次，
+因为哈希的这个算法，通常假设某一条记录从哈希表中进行寻找的话它的成本只需要一次
+
+|              | hash join |
+| ------------ | --------- |
+| 外表扫描次数 | 1         |
+| 内表扫描次数 | 3         |
+| 比较次数     | 4         |
 
 再加上 hash join 的一个很重要的特点和区别就是它不需要创建索引也不需要回表，所以 hash join 的优势就会比较大
 
@@ -244,11 +285,13 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
 
 ## Explain 命令
 
-* 显示吃 SQL 语句的执行计划
+* 显示 SQL 语句的执行计划
 * 5.6 版本支持 DML 语句 
 * 5.6 版本开始支持 JSON 格式的输出
 
 ### query_cost 查询成本
+
+query_cost 这个值没有单位，数值越大就表示开销越大
 
 通过 JSON 格式输出：
 
@@ -418,7 +461,7 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
             WHERE
                 l_shipdate BETWEEN '1997-01-01' AND '1997-02-01')
     ORDER BY p_retailprice DESC
-    LIMIT 10\G;
+    LIMIT 10;
     +----+--------------+-------------+------------+--------+----------------------------------------------+--------------+---------+---------------------+--------+----------+-----------------------------+
     | id | select_type  | table       | partitions | type   | possible_keys                                | key          | key_len | ref                 | rows   | filtered | Extra                       |
     +----+--------------+-------------+------------+--------+----------------------------------------------+--------------+---------+---------------------+--------+----------+-----------------------------+
@@ -430,14 +473,15 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
 
 执行出来的结果首先要看 id ，MySQL 中比较讨厌的一个问题是，执行计划出来的 id 是会相等的，并且对于不同的 id 应该怎么来看呢？
 
-可以记住一个口诀，id 相等的从上往下看，id 不同的从下往上看，比如上面的例子中首先执行的是 id 为 2 的，执行完之后再去执行 id 为 1 的第一个，然后再执行 id 为 1 的第二个，也就是上面例子中其实是按照列 3 1 2 来执行的
+可以记住一个口诀，id 相等的从上往下看，id 不同的从下往上看，比如上面的例子中首先执行的是 id 为 2 的，执行完之后再去执行 id 为 1 的第一个，然后再执行 id 为 1 的第二个，也就是上面例子中其实是按照第 3 1 2 行的顺序来执行的
 
 而且这个口诀只对 80% 的场景是适用的，还有一些场景是不适用的
 
 上面执行计划的解释，按照①②③的顺序看：
 
+    (root@localhost) [dbt3]> ...\G
     *************************** 1. row ***************************
-              id: 1                       <--②：②和③的id相等，id相等的话通常来说表示join关联，顺位第一的表示的是外表
+              id: 1                       <--②：②和③的id相等，根据经验来说id相等的话通常来说表示join关联，顺位第一的表示的是外表
       select_type: SIMPLE
             table: part                   <--part表和③中的<subquery2>的所有记录进行了关联
       partitions: NULL
@@ -448,9 +492,9 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
               ref: NULL
             rows: 198303                  <-- 关联的数据一共是19w行记录
         filtered: 100.00
-            Extra: Using where; Using filesort
+            Extra: Using where; Using filesort  <--用到了order by所以这里还是有Using filesort
     *************************** 2. row ***************************
-              id: 1                       <--③：②和③的id相等，id相等的话通常来说表示join关联，顺位第二的表示的是内表
+              id: 1                       <--③：②和③的id相等，根据经验来说id相等的话通常来说表示join关联，顺位第二的表示的是内表
       select_type: SIMPLE
             table: <subquery2>            <--<subquery2>就是①子查询中产生的那张14w多记录的表
       partitions: NULL
@@ -458,14 +502,14 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
     possible_keys: <auto_key>
               key: <auto_key>             <--因为这张表示内表，所以在内表上要去创建索引，优化器自动把①子查询里面取出来的数据去添加了一个唯一索引，所以①的select_type为MATERIALIZED，表示产生了一张实际的表并且去为l_partkey添加了唯一索引，用唯一索引的原因是这里是where in，in里面是去重的
           key_len: 5
-              ref: dbt3.part.p_partkey    <--关联的列就是p_partkey（和子查询中的l_partkey进行了关联）
+              ref: dbt3.part.p_partkey    <--表示关联的列是哪一个，这里关联的列就是②中的p_partkey（和①中子查询中的l_partkey进行了关联）
             rows: 1
         filtered: 100.00
             Extra: NULL
     *************************** 3. row ***************************
               id: 2                       <--①：这条执行计划是从这里先开始的，所以先从这里开始看
-      select_type: MATERIALIZED           <--表示产生了一张实际的表
-            table: lineitem               <--先通过子查询去查了lineitem这张表
+      select_type: MATERIALIZED           <--表示产生了一张固化的表
+            table: lineitem               <--先通过子查询先查了lineitem这张表
       partitions: NULL
             type: range                   <--是一个范围的查询
     possible_keys: i_l_shipdate,i_l_suppkey_partkey,i_l_partkey <--可能使用到的索引
@@ -474,12 +518,20 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
               ref: NULL
             rows: 140106                  <--优化器预估出来的有多少行记录
         filtered: 100.00                  <--过滤100%，就是说过滤出来就是140106的记录
-            Extra: Using index condition  <--使用了索引
+            Extra: Using index condition
     3 rows in set, 1 warning (0.00 sec)
+
+##### 物化的解释
+
+通常来说查询的结果是不需要物化的
+
+就比如说A表和B表进行关联，B表是通过子查询选出来的(比如1231四条记录)，本来这些记录都是存放在内存里面的，内存里面的记录不是物化的无法为其建立索引，所以这时和A表进行关联B表一定是外表
+
+如果使用的是 in 来进行关联，in 出来的结果是要做去重的，在 MySQL 中去重的话会建一张表然后对这张表上加一个唯一键，那上面B表的结果就从(1231)变成了(123)。这就可以认为此时B表子查询出来的是物化的，并且这张表上还有一个索引并不是光一个结果集，这张表试试上面例子中出现过的 <subquery2\>
 
 在 MySQL 中如果是一个 in 的子查询，这个 in 的子查询 MySQL 优化器会帮你重写成 Join ，并且优化器会非常聪明的帮你选择这个子查询是作为外表还是内表
 
-也可以将这条 in 的子查询改写成 join：
+##### 将这条 in 的子查询改写成 join 的写法
 
     (root@localhost) [dbt3]> SELECT 
         a.*
@@ -496,11 +548,11 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
     ORDER BY a.p_retailprice DESC
     LIMIT 10;
 
-但是这样会存在一个问题，现在 a 表和 b 表进行 join 的话，这时 b 表永远是外表，因为这样的写法只是去产生了一张临时派生表，并且没有对派生表创建索引的功能
+重写完后会存在一个问题，现在 a 表和 b 表进行 join 的话，这时 b 表永远是外表，因为这样的写法只是去产生了一张临时派生表，并且没有对派生表创建索引的功能，如果这时候派生表产生的结果集特别大的话，这时候性能就不如用 in 了，因为 in 会帮你作为内表
 
-如果这时候派生表产生的结果集特别大的话，这时候性能就不如用 in 了，因为 in 会帮你作为内表
+##### 示例
 
-再看一些其他的例子：
+这个执行计划 l_orderkey 上是有索引的，但是它最后使用的是 PRIMARY KEY 而没有使用索引
 
     (root@localhost) [dbt3]> explain format=json SELECT
             MAX(l_extendedprice)
@@ -513,7 +565,7 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
     ************************* 1. row ***************************
               id: 1                         <--id都是1，所以从上往下看
       select_type: SIMPLE
-            table: orders                   <--这里orders表作为外表，而且是首先根据过滤条件把数据过滤出来作为外表
+            table: orders                   <--这里orders表作为外表，是首先根据过滤条件把数据过滤出来之后再作为外表
       partitions: NULL
             type: range                     <--范围查询
     possible_keys: PRIMARY,i_o_orderdate
@@ -538,7 +590,7 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
             Extra: NULL
     2 rows in set, 1 warning (0.00 sec)
 
-这个执行计划 l_orderkey 上是有索引的，但是它最后使用的是 PRIMARY KEY 而没有使用索引，如果强势使用二级索引 i_l_orderkey ，会发现查询成本是会非常大
+如果强制使用二级索引 i_l_orderkey ，会发现查询成本是会非常大
 
     (root@localhost) [dbt3]> explain format = json SELECT 
         MAX(l_extendedprice)
@@ -553,75 +605,13 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
       "query_block": {
         "select_id": 1,
         "cost_info": {
-          "query_cost": "191184.09"  <--这里是18w，而上面的例子只有8w多，因为它需要回表
+          "query_cost": "191184.09"  <--这里是18w，而上面的例子只有8w多，比上面多多了因为这里需要回表
         },
-        "nested_loop": [
-          {
-            "table": {
-              "table_name": "orders",
-              "access_type": "range",
-              "possible_keys": [
-                "PRIMARY",
-                "i_o_orderdate"
-              ],
-              "key": "i_o_orderdate",
-              "used_key_parts": [
-                "o_orderDATE"
-              ],
-              "key_length": "4",
-              "rows_examined_per_scan": 36758,
-              "rows_produced_per_join": 36758,
-              "filtered": "100.00",
-              "using_index": true,
-              "cost_info": {
-                "read_cost": "7388.47",
-                "eval_cost": "7351.60",
-                "prefix_cost": "14740.07",
-                "data_read_per_join": "4M"
-              },
-              "used_columns": [
-                "o_orderkey",
-                "o_orderDATE"
-              ],
-              "attached_condition": "(`dbt3`.`orders`.`o_orderDATE` between '1995-01-01' and '1995-01-31')"
-            }
-          },
-          {
-            "table": {
-              "table_name": "lineitem",
-              "access_type": "ref",
-              "possible_keys": [
-                "i_l_orderkey"
-              ],
-              "key": "i_l_orderkey",
-              "used_key_parts": [
-                "l_orderkey"
-              ],
-              "key_length": "4",
-              "ref": [
-                "dbt3.orders.o_orderkey"
-              ],
-              "rows_examined_per_scan": 4,
-              "rows_produced_per_join": 147036,
-              "filtered": "100.00",
-              "cost_info": {
-                "read_cost": "147036.68",
-                "eval_cost": "29407.34",
-                "prefix_cost": "191184.09",
-                "data_read_per_join": "20M"
-              },
-              "used_columns": [
-                "l_orderkey",
-                "l_extendedprice"
-              ]
-            }
-          }
-        ]
-      }
+    ...
     }
     1 row in set, 1 warning (0.00 sec)
 
-合并两个结果集的例子：
+##### 合并两个结果集的示例
 
     (root@localhost) [dbt3]> explain SELECT
               *
@@ -644,17 +634,15 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
     +----+--------------+------------+------------+------+---------------+------+---------+------+---------+----------+-----------------+
     3 rows in set, 1 warning (0.00 sec)
 
-输出结果的第三行，也是 id 是空值 NULL 的那行的 select_type 为 UNION RESULT，UNION RESULT 的意思就是把两个结果集合并起来，合并起来的时候会使用到临时表，所以这里 Extra 的值为 Using temporary
-
-这里会使用到临时表的原因是进行了去重然后上面加了唯一索引
+输出结果的第三行，也是 id 是空值 NULL 的那行的 select_type 为 UNION RESULT，UNION RESULT 的意思就是把两个结果集合并起来，合并起来的时候会使用到临时表，所以这里 Extra 的值为 Using temporary，这里会使用到临时表的原因是因为 UNION 表示需要去重然后在上面加了唯一索引
 
 从这个例子可以看到 MySQL 一个 SQL 语句里也是可以用到两个索引的，这里上半部分使用了一个索引，下半部分使用了一个索引
 
-求行号问题性能查的原因分析：
+##### 求行号问题性能差的原因分析
 
     (root@localhost) [employees]> explain SELECT -- 先执行这个外部的查询
-        emp_no,                                  -- 先执行这个外部的查询
-        dept_no,                                 -- 先执行这个外部的查询
+        emp_no,
+        dept_no,
         (SELECT 
                 COUNT(1)
             FROM
@@ -664,22 +652,20 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
     FROM
         dept_emp t1;
     +----+--------------------+-------+------------+-------+---------------+---------+---------+------+--------+----------+------------------------------------------------+
-    | id | select_type        | table | partitions | type  | possible_keys | key     | key_len | ref  | rows   | filtered | Extra
-                |
+    | id | select_type        | table | partitions | type  | possible_keys | key     | key_len | ref  | rows   | filtered | Extra                                          |
     +----+--------------------+-------+------------+-------+---------------+---------+---------+------+--------+----------+------------------------------------------------+
-    |  1 | PRIMARY            | t1    | NULL       | index | NULL          | dept_no | 16      | NULL | 331143 |   100.00 | Using index
-                |
+    |  1 | PRIMARY            | t1    | NULL       | index | NULL          | dept_no | 16      | NULL | 331143 |   100.00 | Using index                                    |
     |  2 | DEPENDENT SUBQUERY | t2    | NULL       | ALL   | PRIMARY       | NULL    | NULL    | NULL | 331143 |    33.33 | Range checked for each record (index map: 0x1) |
     +----+--------------------+-------+------------+-------+---------------+---------+---------+------+--------+----------+------------------------------------------------+
     2 rows in set, 2 warnings (0.00 sec)
 
-这个执行计划由于查询类型叫做**依赖子查询 DEPENDENT SUBQUERY**，依赖子查询肯定是依赖外部表的，所以对于这个查询是先执行外部的查询
+这个执行计划由于查询类型叫做**依赖子查询 DEPENDENT SUBQUERY**，依赖子查询肯定是依赖外部表的，所以对于这个查询是先执行外部的查询，所以这里 id 的执行顺序是 1 2 而不是按照口诀说的 2 1
 
 另外这张表每次要关联 331143 * (331143 / 33) 次，也就是 33 万条外部记录乘以过滤后的 DEPENDENT SUBQUERY 数据，所以这条 SQL 语句的代价会非常大，每条外部记录都要去关联扫描10 万多条记录
 
 #### type 类型
 
-按照从上到下，越往后代价越大
+按照从上到下，越往后代价可能越大
 
 * system 只有一行记录的系统表
 * const 最多只有一行返回记录，如主键查询
@@ -687,25 +673,25 @@ hash join 也是先将外表中的数据先放到内存里去，放进去之后�
 * ref 使用普通索引进行查询
 * fulltext 使用全文索引进行查询
 * ref_or_null 和ref类似，使用普通索引进行查询，但要查询NULL值
-* index_merge or查询会使用到的类型
+* index_merge or查询会使用到的类型，一条SQL语句可能使用到了2个索引来进行merge，通常来说比较少见
 * unique_subquery 子查询的列是唯一索引
 * index_subquery 子查询的列是普通索引
 * range 范围扫描
-* index 索引扫描
-* ALL 全表扫描
+* index 索引扫描，不是表示使用了索引，而是表示使用索引在进行扫描
+* ALL   全表扫描
 
 #### Extra
 
-| Extra常见值              | 说明                                               |
-| ------------------------ | -------------------------------------------------- |
-| Using filesort           | 需要使用额外的排序得到结果                         |
-| Using index              | 优化器只需要索引就能得到结果                       |
-| Using index condition    | 优化器使用Index Condition Pushdown优化             |
-| Using index for group by | 优化器只需要使用索引就能处理group by或distinct语句 |
-| Using join buffer        | 优化器需要使用 join buffer，join_buffer_size       |
-| Using MRR                | 优化器使用MRR优化                                  |
-| Using temporary          | 优化器需要使用临时表                               |
-| Using where              | 优化器使用where过滤                                |
+| Extra常见值              | 说明                                                     | 调优方法             |
+| ------------------------ | -------------------------------------------------------- | -------------------- |
+| Using filesort           | 需要使用额外的排序得到结果                               | 调大sort_buffer_size |
+| Using index              | 优化器只需要索引就能得到结果，也就是索引覆盖             | 不需要太关注         |
+| Using index condition    | 优化器使用Index Condition Pushdown优化，使用二级索引出现 |                      |
+| Using index for group by | 优化器只需要使用索引就能处理group by或distinct语句       |                      |
+| Using join buffer        | 优化器需要使用 join buffer，join_buffer_size             | 调大join_buffer_size |
+| Using MRR                | 优化器使用MRR优化                                        | 调大read_cache_size  |
+| Using temporary          | 优化器需要使用临时表                                     | 调大temporary_size   |
+| Using where              | 优化器使用where过滤                                      |                      |
 
 ### 很难的一个 Explain
 
