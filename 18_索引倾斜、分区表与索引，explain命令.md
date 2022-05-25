@@ -193,7 +193,7 @@ MySQL 也不是很适合做 OLAP 的业务，所以不推荐用 MySQL 来做 OLA
       partitions: NULL
             type: range
     possible_keys: i_o_orderdate
-              key: i_o_orderdate        <--这里用到了索引，这里数据量小使用二级索引代价更小，所以优化器选择了是用索引，但是如果数据量大的情况下，使用索引产生大量的回表操作就不划算了
+              key: i_o_orderdate        <--这里用到了索引，这里数据量小使用二级索引代价更小，所以优化器选择了使用索引，但是如果数据量大的情况下，使用索引产生大量的回表操作就不划算了
           key_len: 4
               ref: NULL
             rows: 1                     <--只有1条数据需要扫描
@@ -244,13 +244,13 @@ MRR 也是通过空间换时间，会新开一块内存用来存放每次回表�
     # 这时去掉 MRR关键词也没有问题，因为所有的记录都在内存里了，虽然也涉及到 IO 但是在内存里会很快，基本感觉不到区别
     (root@localhost) [dbt3]> select * from orders where o_orderdate > '1998-01-01'\G
 
-MRR 有个比较遗憾的点就是优化器永远不会主动去选择 MRR
+MRR 有个比较遗憾的点就是优化器永远不会主动去选择 MRR，至少在 5.7 版本里是这样的
 
 ## join 和索引的关系
 
 有索引的话千万级别的 join 其实也是可以的不至于不行，但速度的确会很慢
 
-导致缓慢的原因是 join 的时候 join 的列如果是**二级索引**就需要回表，用下面的语句举个例子：
+导致缓慢的原因是 join 的时候 join 的列如果是**二级索引**就需要回表，用下面的 SQL 语句举个例子：
 
     (root@localhost) [dbt3]> SELECT 
         MAX(l_extendedprice)
@@ -263,7 +263,7 @@ MRR 有个比较遗憾的点就是优化器永远不会主动去选择 MRR
             
     set optimizer_switch='batched_key_access=on,mrr_cost_based=off';
 
-订单表 orders 和 订单明细表 lineitem 进行关联，关联的条件是订单ID l_orderkey = o_orderkey，由于用的 l_orderkey 是二级索引，也就是说 lineitem 这张表是内表，内表上有这样的一个索引来进行关联，但是这个索引是二级索引，二级索引关联比较是没有问题，比较完通过索引来快速定位之后，要查 l_extendedprice 就还需要回表
+订单表 orders 和 订单明细表 lineitem 进行关联，关联的条件是订单ID l_orderkey = o_orderkey，由于用的 l_orderkey 是二级索引，也就是说 lineitem 这张表是内表，内表上有这样的一个索引来进行关联，但是这个索引是二级索引，用二级索引关联比较是没有问题，比较完通过索引来快速定位之后，要查 l_extendedprice 还是需要回表
 
 关联主键的话不需要回表，代价就小多了
 
@@ -272,6 +272,12 @@ MRR 有个比较遗憾的点就是优化器永远不会主动去选择 MRR
 hash join 也是先将外表中的数据先放到内存里去，放进去之后并不直接通过 join buffer 和内表去直接进行比较，而是对 join buffer 中的列去创建了一张哈希表，然后在扫描内表，内表中的每条记录去探测这张哈希表，这就是 hash join 最基本的一个原理
 
 因为哈希的这个算法，通常假设某一条记录从哈希表中进行寻找的话它的成本只需要一次
+
+    A表   B表
+    1     1
+    2     2
+    3     3
+          4
 
 |              | hash join |
 | ------------ | --------- |
