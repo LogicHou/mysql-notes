@@ -217,9 +217,9 @@ mysqld_safe 是一个守护进程，会定期检测 mysqld 的进程是否存在
 添加mysql4配置项：
 
     [mysqld4]
-    server-id = 14 <-- 暂时无用，后面讲复制内容的时候会用到
+    server-id = 14  # 暂时无用，后面讲复制内容的时候会用到
     innodb_buffer_pool_size = 32M
-    basedir = /usr/local/mysql56/ <-- MySQL安装路径
+    basedir = /usr/local/mysql56/  # MySQL安装路径
     datadir = /mdata/data4
     socket = /tmp/mysql.sock4
     port = 3356
@@ -243,9 +243,9 @@ mysqld_safe 是一个守护进程，会定期检测 mysqld 的进程是否存在
 添加mysql80配置项：
 
     [mysqld80]
-    server-id = 18 <-- 暂时无用，后面讲复制内容的时候会用到
+    server-id = 18  # 暂时无用，后面讲复制内容的时候会用到
     innodb_buffer_pool_size = 32M
-    basedir = /usr/local/mysql80/ <-- MySQL路径
+    basedir = /usr/local/mysql80/  # MySQL路径
     datadir = /mdata/data80
     socket = /tmp/mysql.sock80
     port = 3380

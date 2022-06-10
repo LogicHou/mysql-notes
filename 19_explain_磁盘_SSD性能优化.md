@@ -214,5 +214,11 @@ SSD 品牌推荐
 * 关闭 swap
 * 磁盘调度算法设置为 deadline
 
+推荐使用的系统命令：
+
     $ mount -o noatime,nobarrier /dev/sda /data
+        # 5%左右的性能提升
+        # noatime 表示不更新文件系统的元数据信息
+        # nobarrier表示写到缓存就返回
     $ echo deadline > /sys/block/sda/queue/scheduler
+

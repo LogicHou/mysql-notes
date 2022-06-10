@@ -95,7 +95,8 @@ MySQL 5.7.19以上还需要安装libnuma库：
 
 ## 常用命令 
 
-    # 查看数据库
+查看数据库
+
     (root@localhost) [(none)]> show databases;
     +--------------------+
     | Database           |
@@ -107,7 +108,8 @@ MySQL 5.7.19以上还需要安装libnuma库：
     +--------------------+
     4 rows in set (0.00 sec)
 
-    # 使用某个数据库
+使用某个数据库
+
     (root@localhost) [(none)]> use mysql;
     Reading table information for completion of table and column names
     You can turn off this feature to get a quicker startup with -A
@@ -115,7 +117,8 @@ MySQL 5.7.19以上还需要安装libnuma库：
     Database changed
     (root@localhost) [mysql]> #这里[(none)]变成了[mysql]，表示当前使用的数据库
 
-    # 查看当前数据库下面有哪些表
+查看当前数据库下面有哪些表
+
     (root@localhost) [mysql]> show tables;
     +---------------------------+
     | Tables_in_mysql           |

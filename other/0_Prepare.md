@@ -4,6 +4,8 @@
 
     docker run -idt -p 22:22 -p 80:80 -p 8080:8080 -p 443:443 -p 3306:3306 -p 3307:3307 -p 3308:3308 -p 3309:3309 -p 3310:3310 -p 5432:5432 --name mysql1 -v D:/wmnt/:/wmnt centos
 
+    docker run --privileged -idt -p 22:22 -p 80:80 -p 8080:8080 -p 443:443 -p 3306:3306 -p 3307:3307 -p 3308:3308 -p 3309:3309 -p 3310:3310 -p 5432:5432 --name mysql1 -v D:/wmnt/:/wmnt centos:centos8.2.2004 /usr/sbin/init
+
     docker run --privileged -idt -p 22:22 -p 80:80 -p 8080:8080 -p 443:443 -p 3306:3306 -p 6379:6379 -p 27017:27017 --name goaction -v D:/wmnt/:/wmnt centos:centos8.2.2004 /usr/sbin/init
 
     docker exec -it mysql1 bash
@@ -21,6 +23,11 @@
     psql -f setup.sql -d chitchat
 
     docker run -d --name sonar -p 9000:9000 -e sonar.jdbc.username=postgres -e sonar.jdbc.password=123123 -e sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonar -v D:/dshare/:/dshare sonarqube
+
+    # 自封装
+    docker run --privileged -idt -p 3306:3306 -p 3307:3307 -p 3308:3308 -p 3309:3309 -p 3310:3310 -p 5432:5432 --name learnmysql -v D:/wmnt/:/wmnt hou/mysql1:version1 /usr/sbin/init
+
+    docker exec -it learnmysql zsh
 
 安装oh-my-zsh
 
