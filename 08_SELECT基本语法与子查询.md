@@ -2,26 +2,28 @@
 
 ## MySQL--SELECT语法
 
+https://dev.mysql.com/doc/refman/5.7/en/select.html
+
     SELECT
-    [ALL | DISTINCT | DISTINCTROW ]
-    [HIGH_PRIORITY]
-    [STRAIGHT_JOIN]
-    [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT]
-    [SQL_CACHE | SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
-    select_expr [, select_expr] ...
-    [into_option]
-    [FROM table_references
-      [PARTITION partition_list]]
-    [WHERE where_condition]
-    [GROUP BY {col_name | expr | position}
-      [ASC | DESC], ... [WITH ROLLUP]]
-    [HAVING where_condition]
-    [ORDER BY {col_name | expr | position}
-      [ASC | DESC], ...]
-    [LIMIT {[offset,] row_count | row_count OFFSET offset}]
-    [PROCEDURE procedure_name(argument_list)]
-    [into_option]
-    [FOR UPDATE | LOCK IN SHARE MODE]
+        [ALL | DISTINCT | DISTINCTROW ]
+        [HIGH_PRIORITY]
+        [STRAIGHT_JOIN]
+        [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT]
+        [SQL_CACHE | SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS]
+        select_expr [, select_expr] ...
+        [into_option]
+        [FROM table_references
+          [PARTITION partition_list]]
+        [WHERE where_condition]
+        [GROUP BY {col_name | expr | position}
+          [ASC | DESC], ... [WITH ROLLUP]]
+        [HAVING where_condition]
+        [ORDER BY {col_name | expr | position}
+          [ASC | DESC], ...]
+        [LIMIT {[offset,] row_count | row_count OFFSET offset}]
+        [PROCEDURE procedure_name(argument_list)]
+        [into_option]
+        [FOR UPDATE | LOCK IN SHARE MODE]
 
     into_option: {
         INTO OUTFILE 'file_name'
@@ -42,11 +44,11 @@
             AND o_orderDATE < '2009-03-01'
     LIMIT 10;
 
-SELECT 语法中最重要的三个知识点一个是 ORDER BY，一个是 GROUP BY，一个是 LIMIT
+**SELECT 语法中最重要的三个知识点分别是 ORDER BY，GROUP BY 和 LIMIT**
 
 ### ORDER BY
 
-ORDER BY 默认是从小往大进行排序的 ASC：
+ORDER BY 默认是从小往大 (ASC) 进行排序的：
 
     (root@localhost) [dbt3]> SELECT 
         *
@@ -57,10 +59,17 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     .....
     10000 rows in set (30.563 sec)
 
+需要注意的是加上 order by 后查询会比不加要慢很多，这是因为 order by 是需要额外的性能开销的，去掉 order by 会发现查询效率变得快多了：
 
-    # 这里会发现运行的比较慢，然而不加 order by 就比较快，是因为 order by 是需要额外的开销的
+    (root@localhost) [dbt3]> SELECT 
+        *
+    FROM
+        lineitem
+    LIMIT 10000;
+    .....
+    10000 rows in set (0.06 sec)
 
-一个关于 order by 的参数，叫排序会用到的内存，默认是 256K 的大小，这个参数可以在会话级别进行修改：
+一个关于 order by 的参数，叫排序会用到的内存，默认是 256K 的大小，这个参数可以在会话级别进行修改
 
     (root@localhost) [(none)]> show variables like 'sort_buffer_size';
     +------------------+--------+
@@ -70,7 +79,8 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     +------------------+--------+
     1 row in set (0.00 sec)
 
-    # 显然256k有点小，现在改成256m试一下
+显然256k有点小，现在改成256m试一下
+
     (root@localhost) [(none)]> set sort_buffer_size = 256*1024*1024;
     Query OK, 0 rows affected (0.00 sec)
 
@@ -82,7 +92,8 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     +------------------+-----------+
     1 row in set (0.00 sec)
     
-    # 再试一下上面买的select语句，性能提升接近一倍
+再试一下上面买的select语句，性能提升接近一倍
+
     SELECT 
         *
     FROM
@@ -90,9 +101,9 @@ ORDER BY 默认是从小往大进行排序的 ASC：
     ORDER BY l_discount
     LIMIT 10000;
     .....
-    10000 rows in set (17.54 sec)
+    10000 rows in set (17.54 sec)  <--注意注意这里的时间少了很多
 
-所以对于如果你的查询中有大量的 order by 并且是真正的需**要去排序的也没有索引**可以利用的话，这时候一定要注意要去调大 sort_buffer_size，这块内存是每个会话会去申请的
+所以如果你的查询中有大量的 order by 并且是真正的需要去排序的**同时没有索引可以利用**的话，这时候一定要注意要去调大 sort_buffer_size
 
 my.cnf 中稍微调大一点 sort_buffer_size
 
@@ -134,11 +145,11 @@ my.cnf 中稍微调大一点 sort_buffer_size
     | Sort_scan         | 32     |
     +-------------------+--------+
 
-sort_buffer_size 是相对于每个会话的，如果这时有 100 个线程连着都在做 sort 操作的话就会有 100 * sort_buffer_size 的开销，所以 sort_buffer_size 可以设得相对来说大一点但是也别设得太大，因为这个变量是基于每个会话可以使用的内存，加起来如果并发量大的话对内存的开销可能是会比较大的。不建议设得很多，因为有些查询可以去建个索引来避免排序的
+需要注意的是 sort_buffer_size 是相对于每个会话的，如果这时有 100 个线程连着都在做 sort 操作的话就会有 100 * sort_buffer_size 的开销，所以 sort_buffer_size 可以设得相对来说大一点但是也别设得太大，因为这个变量是基于每个会话可以使用的内存，如果并发量大的话加起来对内存的开销可能是会比较大的。不建议设得很多，因为有些查询可以去建个索引来避免排序的
 
 order by 的另一种写法：
 
-    SELECT 
+    (root@localhost) [dbt3]> SELECT
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
@@ -149,13 +160,13 @@ order by 的另一种写法：
 
 实现分页的效果：
 
-    SELECT 
+    (root@localhost) [dbt3]> SELECT
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
     LIMIT 0,10; # 取前10条
 
-    SELECT 
+    (root@localhost) [dbt3]> SELECT
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
@@ -167,7 +178,7 @@ LIMIT 语法有一个非常严重的问题，如果 limit 值很大速度就会�
         o_orderkey,o_orderDATE,o_orderpriority
     FROM
         orders
-    LIMIT 1000000,10; <--表示先读一百万十条数据，然后再读10条数据给你，前面先要读一百万条数据所以就慢了
+    LIMIT 1000000,10; # 表示先读一百万十条数据，然后再读10条数据给你，前面先要读一百万条数据所以就慢了
 
 ### GROUP BY
 
