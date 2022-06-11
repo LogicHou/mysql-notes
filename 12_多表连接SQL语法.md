@@ -57,6 +57,7 @@
 
     (root@localhost) [test]> select * from x,y where x.a = y.a;
     (root@localhost) [test]> select * from x inner join y on x.a = y.a;
+    (root@localhost) [test]> select * from x cross join y on x.a = y.a;
     (root@localhost) [test]> select * from x join y on x.a = y.a;
     +------+------+------+---------------------+ <--这3条语句都是等价的，出来的结果都一样，性能也完全一样
     | a    | b    | a    | b                   |
@@ -77,11 +78,13 @@
     |    2 |   20 |
     +------+------+
     2 rows in set (0.00 sec)
-    # 这里会对重复的数据进行去重，只出现 x 表中出现的数据，不会重复出现
-    # 而 JOIN 关联出来的数据可以是一对多的情况
-    # JOIN 和子查询其实是会有一些些关联的，但又不完全一样，IN 只会出现 x 表中的数据，INNER JOIN 的话只要关联条件满足的话就会把数据组合起来，会出现多条数据
 
-    # 将上面的 IN 写法改写成 JOIN 但是依旧保留原来的去重效果
+这里会对重复的数据进行去重，只出现 x 表中出现的数据，不会重复出现，而 JOIN 关联出来的数据可以是一对多的情况
+
+JOIN 和子查询其实是会有一些些关联的，但又不完全一样，IN 只会出现 x 表中的数据，INNER JOIN 的话只要关联条件满足的话就会把数据组合起来，会出现多条数据
+
+将上面的 IN 写法改写成 JOIN 但是依旧保留原来的去重效果
+
     (root@localhost) [test]> select distinct x.* from x join y on x.a = y.a;
     +------+------+
     | a    | b    |
@@ -91,9 +94,9 @@
     +------+------+
     2 rows in set (0.00 sec)
 
-JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
+JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)？ TODO
 
-### 笛卡尔积
+### 笛卡尔积 CROSS JOIN
 
 去两张表里面取数据，如果没有关联条件，那么出来就是一个称之为笛卡尔积的结果，下面的例子就是 3*3 出来了 9 条数据
 
@@ -157,7 +160,7 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
 
 分两条语句写性能会更好？其实是很没有道理的
 
-### 示例：employees 数据库下有 employees 这张表，现在要求出这个员工所在的部门的名称是多少
+### 示例：employees 数据库下有 employees 这张表，现在要求出这个员工所在的部门的名称是什么
 
 首先使用这样的语句进行查询
 
@@ -201,7 +204,7 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
 
 #### 取出每个员工最新的 title 信息：
 
-求出当前每个员工最新的 titles 信息：
+独立子查询写法：
 
     (root@localhost) [employees]> SELECT
         emp_no, title
@@ -215,7 +218,7 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
             GROUP BY emp_no);
     300033 rows in set (1.62 sec)
 
-改写关联语句达到效果(通过派生表的方式，也就是以上面查询语句的结果集进行关联)：
+改写关联语句达到同样效果(通过派生表的方式，也就是以上面查询语句的结果集进行关联)：
 
     (root@localhost) [employees]> SELECT 
         e.emp_no, t.title
@@ -233,15 +236,17 @@ JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)
                 GROUP BY emp_no)) t
     WHERE
         e.emp_no = t.emp_no;
-    300033 rows in set (2.56 sec)
+    300033 rows in set (2.56 sec)  <--改写后性能下降了，因为这里是相关子查询
 
-## 外连接 outer 关键词可以省略
+使用这种方法输出的结果虽然一样，但是需要获得更多 employees 表相关的字段时就得这么写
 
-左连接将 x 作为左表，x 作为保留表，保留表中的所有行**都要出现**，之后再和y表进行关联
+## 外连接（LEFT JOIN, RIGHT JOIN）， outer 关键词可以省略
+
+LEFT JOIN 左连接将 x 作为左表，x 作为保留表，保留表中的所有行**都要出现**，之后再和 y 表进行关联
 
 如果关联条件成立就将数据关联出来，如果关联条件不成立就用 NULL 值进行填充，但是左表中的数据**都要出现**
 
-right outer join 右连接就是反过来右边那个表是保留表，原理和左连接也是一样的
+RIGHT OUTER JOIN 右连接就是反过来右边那个表是保留表，原理和左连接也是一样的
 
     (root@localhost) [test]> select * from x left outer join y on x.a = y.a;
     +------+------+------+---------------------+
@@ -254,7 +259,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
     +------+------+------+---------------------+
     4 rows in set (0.00 sec)
 
-对于 left join 经常使用的一个方法是，取出在左表中但是不在右表中的数据(差集)
+对于 LEFT JOIN 经常使用的一个方法是，取出在左表中但是不在右表中的数据(差集)
 
     (root@localhost) [test]> select * from x left outer join y on x.a = y.a where y.a is NULL;
     +------+------+------+------+
@@ -285,7 +290,8 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
     +------+------+------+---------------------+
     1 row in set (0.00 sec)
 
-    # 改成下面的写法 inner join 也是可以的( where 改成了 and )
+改成下面的写法 inner join 也是可以的( where 改成了 and )
+
     (root@localhost) [test]> select * from x inner join y on x.a = y.a and x.a = 1;
     +------+------+------+---------------------+
     | a    | b    | a    | b                   |
@@ -296,7 +302,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
 
 如果写成 where y.a is NULL 就是取出在左表中但是不在右表中的数据
 
-    (root@localhost) [test]> select * from x left outer join y on x.a = y.a where y.a is not NULL;
+    (root@localhost) [test]> select * from x left outer join y on x.a = y.a where y.a is NULL;
     +------+------+------+------+
     | a    | b    | a    | b    |
     +------+------+------+------+
@@ -316,7 +322,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
     +------+------+------+------+
     3 rows in set (0.00 sec)
 
-这是因为首先 x 表的所有都要保留，接着和 y 表进行关联，但是 y 表的关联条件不仅是 x.a = y.a，而且要 y.a 是 NULL 值，也就是说这两张表的关联条件是这整个条件(y on x.a = y.a and y.a is NULL)，显然这里都不满足因为 y.a 都不是 NULL 值，所以这里出现的都是 NULL
+这是因为首先 x 表的所有都要保留，接着和 y 表进行关联，但是 y 表的关联条件不仅是 x.a = y.a，而且要 y.a 是 NULL 值，也就是说这两张表的关联条件是这整个条件(on x.a = y.a and y.a is NULL)，显然这里 y.a 是 1，2 的时候都不满足因为此时 y.a 都不是 NULL 值，所以这里出现的都是 NULL
 
 对 inner join 来说 where 的过滤条件是可以写在 on 里面。但是对外连接的话 on 是做表之间的关联，where 是用来做其他条件的过滤，千万不要把其他条件的过滤写到 on 里面，否则出来的结果可能是错误的
 
@@ -389,7 +395,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
 
 不要直接和 order 表进行关联，先把 orders 表中 97 年的订单数据取出来，然后再和 customer 表中客户表去进行关联
 
-    -- 第一种写法
+第一种写法：
 
     (root@localhost) [dbt3]> SELECT 
         c.c_name, c.c_phone, c.c_address
@@ -409,7 +415,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
         o.o_orderkey IS NULL
             AND n.n_name = 'CANADA';
 
-    -- 也可以写成这样，但是这么写可能不太好理解，上面的写法更符合直觉，而且某些判断条件下也不能这么写，所以还是推荐写成上面那样
+也可以写成这样，但是这么写可能不太好理解，上面的写法更符合直觉，而且某些判断条件下也不能这么写，所以还是推荐写成上面那样：
 
     (root@localhost) [dbt3]> SELECT 
         c.c_name, c.c_phone, c.c_address
@@ -431,7 +437,7 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
 
 从表里取数据希望每条记录前面有一个行号，但是如果想要取出来的数据没有一个自增的行号，在 oracal 数据库中有一个叫 row number 的函数，会自动帮你加一个行号的列，但是 MySQL 并没有这样的一个功能
 
-    (root@localhost) [employees]> select * from employees order by emp_no limit 10;
+    (oracal适用) [employees]> select * from employees order by emp_no limit 10;
     +--------+------------+------------+-----------+--------+------------+
     | emp_no | birth_date | first_name | last_name | gender | hire_date  |
     +--------+------------+------------+-----------+--------+------------+
@@ -485,7 +491,19 @@ right outer join 右连接就是反过来右边那个表是保留表，原理和
 
 其实还有这么一种写法，好处是一条 sql 就可以完成，会自动初始化自定义变量
 
-    (root@localhost) [employees]> select @a:=@a+1 as rownum,emp_no,birth_date,first_name,last_name,gender,hire_date from employees,(select @a:=0) a limit 10;
+    (root@localhost) [employees]> 
+    SELECT 
+        @a:=@a + 1 AS rownum,
+        emp_no,
+        birth_date,
+        first_name,
+        last_name,
+        gender,
+        hire_date
+    FROM
+        employees,
+        (SELECT @a:=0) a
+    LIMIT 10;
 
 原理是两表关联产生了笛卡尔积，首先select @a:=0；产生了只有一个列的一张表：
 
@@ -522,7 +540,7 @@ TIPS: limit 取数据不加排序是随机取数据的，因为集合这个东�
         ORDER BY emp_no
         LIMIT 10;
 
-### on and where 区别
+### ON AND WHERE 区别
 
 on 是表之间的关联的过滤
 
@@ -545,17 +563,18 @@ TIPS：
 
 首先发现有一个员工的数据存在了两天 to_date 一样的数据，这样用 group by 来进行分组的话就会出错
 
-    (root@localhost) [employees]> SELECT
-            *
-        FROM
-            salaries
-        WHERE
-            (emp_no , to_date) IN (SELECT
-                    emp_no, to_date
-                FROM
-                    salaries
-                GROUP BY emp_no , to_date
-                HAVING COUNT(1) > 1);
+    (root@localhost) [employees]>
+    SELECT 
+        *
+    FROM
+        salaries
+    WHERE
+        (emp_no , to_date) IN (SELECT 
+                emp_no, to_date
+            FROM
+                salaries
+            GROUP BY emp_no , to_date
+            HAVING COUNT(1) > 1);
     +--------+--------+------------+------------+
     | emp_no | salary | from_date  | to_date    |
     +--------+--------+------------+------------+
@@ -568,12 +587,13 @@ TIPS：
   
 那么先筛选掉重复的数据，即一对多表示的情况下求最新的员工的信息：
 
-    (root@localhost) [employees]> SELECT 
+    (root@localhost) [employees]> 
+    SELECT 
         emp_no, salary
     FROM
         salaries
     WHERE
-        (emp_no, from_date, to_date) IN (SELECT 
+        (emp_no , from_date, to_date) IN (SELECT 
                 emp_no, MAX(from_date), MAX(to_date)
             FROM
                 salaries
@@ -583,7 +603,8 @@ TIPS：
 
 一次扫完的写法(先使用 GROUP_CONCAT，然后再 SUBSTRING_INDEX 取第一个字符串，最后转成整形)：
 
-    (root@localhost) [employees]> SELECT 
+    (root@localhost) [employees]> 
+    SELECT 
         emp_no,
         CAST(SUBSTRING_INDEX(GROUP_CONCAT(salary
                         ORDER BY to_date DESC , from_date DESC),

@@ -15,11 +15,11 @@
 
 GROUP BY 的意思表示的是做分组，分组后面可以加字段列表（可以是一个字段也可以是多个字段）
 
-比如一个需求，每个用户产生的订单总额，其中的**"每"**就代表 GROUP BY（GROUP BY userid FROM orders）
+比如一个需求，每个用户产生的订单总额，其中的**每**就代表 GROUP BY（GROUP BY userid FROM orders）
 
-**然后 SELECT 中必须出现 userid 和聚合函数**
+**然后 SELECT 中必须出现 GROUP BY 的那个字段 (userid) 和聚合函数**
 
-这就是分组，也就是说根据某个字段来进行分组，分组完之后要对其他字段进行一个聚合操作（max，min，count，sum）
+这就是分组，也就是说根据某个字段来进行分组，分组完之后要对其他出现的字段进行一个聚合操作（max，min，count，sum）
 
 通常来说 GROUP BY 分组之后是要有一个聚合函数，既然是分组了肯定是要来进行计算的，并且这个计算一定是一个聚合的计算，这就是 GROUP BY
 
@@ -147,9 +147,9 @@ my.cnf 中推荐设置成 32M
     # count(a) 返回表里列a不为NULL值的记录数
     # count(*) 和 count(1) 一模一样没有区别，其实括号里的数字随便多少都可以比如 count(2), count(3), count(100), 都是一样的
 
-### HAVING where condition
+### HAVING WHERE DONDITION
 
-和 where 过滤是不一样的，看下例子：
+和 WHERE 过滤是不一样的是，HAVING 的意思是对聚合之后的表达式进行过滤，看下例子：
 
     (root@localhost) [dbt3]> SELECT 
         DATE_FORMAT(o_orderDATE, '%Y-%m') month,
@@ -164,13 +164,11 @@ my.cnf 中推荐设置成 32M
     HAVING count > 19000;
     Empty set (0.00 sec)
 
-HAVING 的意思是对聚合之后的表达式进行过滤
-
-如果没有使用 where 进行过滤就使用 HAVING，可能就会扫描全表，如果使用 where之 后再使用 HAVING 则是在过滤之后的结果中再进行过滤，查询性能就会好很多，这一点**非常重要**
+如果没有使用 where 进行过滤就使用 HAVING，可能就会扫描全表，如果使用 WHERE 之后再使用 HAVING 则是在过滤之后的结果中再进行过滤，查询性能就会好很多，这一点**非常重要**
 
 像下面这么写查询性能就会比较差：
 
-    SELECT 
+    (root@localhost) [dbt3]> SELECT 
         DATE_FORMAT(o_orderDATE, '%Y-%m') month,
         COUNT(*) count,
         SUM(o_totalprice) sum
@@ -230,7 +228,7 @@ HAVING 的意思是对聚合之后的表达式进行过滤
     # mysql 5.7 版本中如果group by了某个字段，那么在select中它只能出现那个分组的字段列表和聚合函数，绝对不能出现另外一个单独的列(这里是date列)
     # 在mysql 5.6 版本中不会报错，date会出现任何任何记录当中随机的一条记录
 
-一个很重要的参数 sql model，比 5.6多 了 ONLY_FULL_GROUP_BY，所以 5.7 中变得不一样
+一个很重要的参数 sql model，比 5.6 多了 ONLY_FULL_GROUP_BY，所以 5.7 中变得不一样
 
     (root@localhost) [(none)]> show variables like 'sql_mode';
     +---------------+-------------------------------------------------------------------------------------------------------------------------------------------+
@@ -271,7 +269,8 @@ HAVING 的意思是对聚合之后的表达式进行过滤
     +--------+---------------------+
     3 rows in set (0.00 sec)
 
-    # 可以指定符号
+可以指定符号
+
     (root@localhost) [test]> select userid, group_concat(price separator ':') from a group by userid;
     +--------+-----------------------------------+
     | userid | group_concat(price separator ':') |
@@ -282,7 +281,8 @@ HAVING 的意思是对聚合之后的表达式进行过滤
     +--------+-----------------------------------+
     3 rows in set (0.00 sec)
 
-    # 对结果排序
+对结果排序
+
     (root@localhost) [test]> select userid, group_concat(price order by price separator ':') from a group by userid;
     +--------+--------------------------------------------------+
     | userid | group_concat(price order by price separator ':') |
@@ -293,7 +293,8 @@ HAVING 的意思是对聚合之后的表达式进行过滤
     +--------+--------------------------------------------------+
     3 rows in set (0.01 sec)
 
-    # 逆序
+逆序
+
     (root@localhost) [test]> select userid, group_concat(price order by date desc separator ':') from a group by userid;
     +--------+------------------------------------------------------+
     | userid | group_concat(price order by date desc separator ':') |
@@ -316,9 +317,7 @@ HAVING 的意思是对聚合之后的表达式进行过滤
     WHERE
         data_type IN ('varchar' , 'longtext', 'text', 'mediumtext', 'char')
             AND character_set_name <> 'utf8mb4'
-            AND table_schema NOT IN ('mysql' , 'performance_schema',
-            'information_schema',
-            'sys')
+            AND table_schema NOT IN ('mysql' , 'performance_schema', 'information_schema', 'sys')
     GROUP BY name , character_set_name;
 
 ## SELECT 的 distinct 去重
@@ -348,10 +347,10 @@ HAVING 的意思是对聚合之后的表达式进行过滤
 
 * ANY 关键词的意思是“对于在子查询返回的列中的任一数值，如果比较结果为 TRUE 的话，则返回 TRUE”
         
-      SELECT s1 FROM t1 WHERE s1 > ANY (SELECT s1 FROM t2); # 也就是s1 t1 中的所有值必须大于any 后面筛选出来的值，这个where条件才成立
+      SELECT s1 FROM t1 WHERE s1 > ANY (SELECT s1 FROM t2); # 也就是s1 t1中的所有值必须大于any后面筛选出来的值，这个where条件才成立
 
 * SOME = ANY
-* IN equals = ANY 表示等于ANY中的任何一个值就可以了，这是用得最多的的类型，大部分情况下推荐使用这个
+* IN equals = ANY 表示等于 ANY 中的任何一个值就可以了，这是用得最多的的类型，大部分情况下推荐使用这个
 
       SELECT s1 FROM t1 WHERE s1 = ANY (SELECT s1 FROM t2);
       SELECT s1 FROM t1 WHERE s1 IN (SELECT s1 FROM t2);
@@ -380,17 +379,6 @@ HAVING 的意思是对聚合之后的表达式进行过滤
       
 * 相关子查询
   * 引用了外部查询列的子查询
-
-        SELECT 
-            orderid, customerid, employeeid, orderdate, requireddate
-        FROM
-            orders
-        WHERE
-            orderdate IN (SELECT 
-                    MAX(orderdate)
-                FROM
-                    orders
-                GROUP BY employeeid);
 
 独立子查询示例：
 
@@ -429,7 +417,7 @@ HAVING 的意思是对聚合之后的表达式进行过滤
               FROM
                   orders AS B
               WHERE
-                  A.customerid = B.customerid);
+                  A.customerid = B.customerid);  # 有两个表关联条件的都可以视为相关子查询
 
 IN 写法的示例，这里属于独立子查询
 
@@ -438,7 +426,7 @@ IN 写法的示例，这里属于独立子查询
     FROM
         employees
     WHERE
-        emp_no IN (SELECT     # IN的写法是某个列IN某个子查询
+        emp_no IN (SELECT       # IN的写法是某个列IN某个子查询
                 emp_no
             FROM
                 dept_emp
@@ -458,12 +446,12 @@ EXISTS 写法的示例，这里属于相关子查询
             FROM
                 dept_emp de
             WHERE
-                dept_no = 'd005' AND e.emp_no = de.emp_no) # 这里和外部表进行了关联，以此作为是相关子查询的依据
+                dept_no = 'd005' AND e.emp_no = de.emp_no) # 这里和外部表进行了关联，以此作为是相关子查询的判断依据
     LIMIT 10;
 
 ### 子查询的优化
 
-* 每月最后实际订单日期发生的订单(每个月最后一笔订单的情况)，这里的 GROUP BY 只执行了一次
+每月最后实际订单日期发生的订单(每个月最后一笔订单的情况)，这里的 GROUP BY 只执行了一次
 
       (root@localhost) [dbt3]> SELECT 
           *
@@ -476,7 +464,7 @@ EXISTS 写法的示例，这里属于相关子查询
                   orders
               GROUP BY (DATE_FORMAT(o_orderdate, '%Y%M')));
 
-* 改写成 EXISTS，这里的 GROUP BY 执行了 150W 次，明显上面的写法性能更好，同时也体现了独立子查询和相关子查询的区别
+改写成 EXISTS，这里的 GROUP BY 执行了 150W 次，明显上面的写法性能更好，同时也体现了独立子查询和相关子查询的区别
 
       (root@localhost) [dbt3]> SELECT 
           *
@@ -488,7 +476,7 @@ EXISTS 写法的示例，这里属于相关子查询
               FROM
                   orders b
               GROUP BY (DATE_FORMAT(o_orderdate, '%Y%M'))
-              HAVING MAX(o_orderdate) = a.o_orderdate);
+              HAVING MAX(b.o_orderdate) = a.o_orderdate);  #每个a.o_orderdate都会和b.o_orderdate进行一次关联查询，所以性能很差
 
 MySQL 对于所有 IN 的子查询在 5.6 以前的版本中都是重写成了 EXISTS 相关子查询，执行效率非常非常差，最重要的原因是相关子查询会执行 N 多次，因为需要额外表中的每一行数据来进行关联，外部表有多少行记录子查询就需要执行多少次
 
@@ -548,7 +536,7 @@ MySQL 对于所有 IN 的子查询在 5.6 以前的版本中都是重写成了 E
     +----------------------------+
     1 row in set (0.00 sec)
 
-NOT IN 永远只会返回 0 和 NULL
+在和有 NULL 值的数据集进行比较的时候，如果条件不成立都会返回 NULL 值
 
 这就会遇到一个问题，来看下这个例子：
 
@@ -587,7 +575,7 @@ NOT IN 永远只会返回 0 和 NULL
 
     (root@localhost) [test]> select * from a where userid not in (select y from b);
     Empty set (0.00 sec)
-    # 按道理应该返回 userid 为 3 的数据，但是返回的确实空值，空值的原因就在于前面例子中的 NOT IN 对于带有 NULL 值的只会返回 0 和 NULL 值，where 中 0 和 NULL 值代表的就是 false，所以永远取不到想要的结果
+    # 按道理应该返回 userid 为 3 的数据，但是返回的确是空值，空值的原因就在于前面例子中的 NOT IN 对于带有 NULL 值的只会返回 0 和 NULL 值，where 中 0 和 NULL 值代表的就是 false，所以永远取不到想要的结果
     # 这一点要非常注意
     # 如果遇到类似的问题，第一反应应该就是子查询的数据集里是否带了 NULL 值
 
