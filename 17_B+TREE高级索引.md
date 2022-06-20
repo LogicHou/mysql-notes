@@ -23,7 +23,7 @@
     | Field         | Type          | Null | Key | Default | Extra |
     +---------------+---------------+------+-----+---------+-------+
     | ...           | varchar(1)    | YES  |     | NULL    |       |
-    | CARDINALITY   | bigint(21)    | YES  |     | NULL    |       |  <--
+    | CARDINALITY   | bigint(21)    | YES  |     | NULL    |       |  <--CARDINALITY值
     | ...           | varchar(1024) | NO   |     |         |       |
     +---------------+---------------+------+-----+---------+-------+
     16 rows in set (0.00 sec)
@@ -36,7 +36,7 @@
       NON_UNIQUE: 0
     INDEX_SCHEMA: dbt3
       INDEX_NAME: PRIMARY        <--主键索引
-    SEQ_IN_INDEX: 1
+    SEQ_IN_INDEX: 1              <--索引顺位，如果是联合索引就是在联合索引中的排位
       COLUMN_NAME: c_custkey
         COLLATION: A
       CARDINALITY: 148296        <--CARDINALITY值
@@ -81,7 +81,8 @@
 
 ### 找出索引区分度小于 10% 的 SQL
 
-    (root@localhost) [information_schema]> SELECT 
+    (root@localhost) [information_schema]> 
+    SELECT 
         CONCAT(t.TABLE_SCHEMA, '.', t.TABLE_NAME) table_name,
         INDEX_NAME,
         CARDINALITY,
@@ -114,7 +115,7 @@
 
 复合索引就是对多个列组合起来创建索引，原理和单索引的原理一样，只不过存放的 Key 变成了由多个索引组成的一个 Key
 
-对于 (a,b) 组成的符合索引，其中 a 是排序过的，根据 (a,b) 也已经是排序过的，但是对 (a,b) 排序了不一定代表对 b 也进行了排序
+对于 (a,b) 组成的符合索引，其中 a 是排序过的，(a,b) 也已经是排序过的，但是对 (a,b) 排序了不一定代表对 b 也进行了排序
 
 对于复合索引可以用于这些 SQL 语句：
 
@@ -129,7 +130,7 @@
 
     SELECT * FROM t WHERE a=? order by b 
     
-WHERE a=? order by b 的用法是复合索引用得比较多的场景，比如查询用户叫 neo 的订单信息，并且根据下单信息列出最近下单的 N 条记录，如果只对 a 做索引，b 依旧会用到受 sort_buffer_size 参数影响的 Using filesort ，Using filesort 对 cpu 的开销会比较大
+**WHERE a=? order by b 的用法是复合索引用得比较多的场景**，比如查询用户叫 neo 的订单信息，并且根据下单信息列出最近下单的 N 条记录，如果只对 a 做索引，b 依旧会用到受 sort_buffer_size 参数影响的 Using filesort ，Using filesort 对 cpu 的开销会比较大
 
 对这样的语句线上很可能就只对 a 创建了索引，所以这里也可以根据这个做一个例行巡检脚本，通过 sys 库中的 statements_with_sorting 表中的 exec_count 字段可以发现这个问题
 
@@ -182,7 +183,7 @@ WHERE a=? order by b 的用法是复合索引用得比较多的场景，比如�
 
 #### 查看复合索引是否是高效的
 
-@todo 找出设计不怎么合理的索引，也就是CARDINALITY值比较低的索引，注意abc abc的CARDINALITY值加起来其实都是相等的
+找出设计不怎么合理的索引，也就是 CARDINALITY 值比较低的索引，注意 abc ab 的 CARDINALITY 值加起来其实都是相等的
 
 可以通过 information_schema.STATISTICS 这张表查看 (a,b,c) 组成的索引是否是高效的
 
@@ -227,6 +228,36 @@ WHERE a=? order by b 的用法是复合索引用得比较多的场景，比如�
 
 ### 索引覆盖
 
+| id  | address  | name | age |
+| --- | -------- | ---- | --- |
+| 1   | shanghai | a    | 12  |
+| 2   | beijing  | a    | 13  |
+| 3   | chengdu  | b    | 12  |
+| 4   | hangzhou | b    | 18  |
+| 5   | chengdu  | c    | 12  |
+| 6   | shanghai | c    | 13  |
+
+上面的表中，其中 id 是主键值，address 是二级索引，name 和 age 构成了复合索引 idx_name_age
+
+那么用下列查询时会有回表的操作：
+
+    select * from user where address = "hangzhou";
+
+但是有一种情况不会产生回表操作，比如刚好查询的是主键值，由于二级索引的叶子节点包含了主键值，这时就不会产生回表操作：
+
+    select id from user where address = "hangzhou";
+
+因为复合索引中(a,b)中的 a 是排序的，所以使用下面的查询也不会进行回表：
+
+    select id, age from user where name = 'a';
+
+当以 age 为查询条件的时候，由于(a,b)中的 b 不是排序的，就会导致索引失效：
+
+    select id, age from user where age = 12;
+
+索引失效一般都是联合索引
+
+
 通常来说复合索引都是二级索引，对于二级索引的叶子节点保存的是键值和主键值，对于 a b c d 四个列的索引，假设 d 是用的主键索引，那么由 a b 创建的复合索引，它的叶子节点中就会保存 (a b d)，其中 d 是主键值，并且 (a b d) 是排序的
 
 索引覆盖的意思是如果二级复合索引中包含了主键值，对于下面的这些查询不需要回表：
@@ -266,6 +297,23 @@ WHERE a=? order by b 的用法是复合索引用得比较多的场景，比如�
                 subpart_exists: 0
                 sql_drop_index: ALTER TABLE `dbt3`.`lineitem` DROP INDEX `i_l_orderkey` <--修复语句
     1 row in set (0.01 sec)
+
+### 索引失效
+
+#### 索引失效的一些典型场景
+
+* 最左前缀-联合索引
+* like
+  * like "neo%"  可以使用索引
+  * like "%neo"  不能走索引
+  * like "%neo%" 不能走索引
+* 在列上不能进行函数运算
+  * explain select * from salaries where abs(salary) < 40000;
+  * 对有索引的列使用了函数，查询就不会使用索引，因为运算的话就不知道结果是多少
+* in 和 not in，这里注意 in 不会造成索引失效，但是 not in 会
+
+#### 索引失效的原理
+
 
 ### 索引不可见 (MySQL8.0 适用)
 

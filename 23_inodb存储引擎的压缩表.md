@@ -85,8 +85,68 @@
 
     ALTER TABLE XXX
     ENGINE=InnoDB
-    ROW_FORMAT=compressed,KEY_BLOCK_SIZE=8  # 8表示用几K的页大小进行压缩
+    ROW_FORMAT=compressed,KEY_BLOCK_SIZE=8;  # 8表示用几K的页大小进行压缩
 
 注意并不是页设置的越小压缩率就越小，因为这个压缩算法是这样的，如果 16K 可以压缩到 8K 那么就可以压缩到 8K，如果 16K 只能压缩到 12K，那么会压缩出两个 8K，这种情况下压缩率基本是变化不大的
 
 压缩成功率方面，16K 压缩到 8K 的成功率大致在 80% 左右，但是从 16K 压缩到 4K 成功率不会那么高
+
+#### 设置成 16K 的意义
+
+    ALTER TABLE XXX
+    ENGINE=InnoDB
+    ROW_FORMAT=compressed,KEY_BLOCK_SIZE=16;
+
+虽然设置的和默认一样是 16K，但是里面的内容是经过压缩的，简单里说就是压缩过的 16K 的页比非压缩的 16K 的页存放的数据要更多
+
+### 表空间 -- 记录
+
+* 用户记录保存在数据页中
+* 记录格式由ROW_FORMAT选项决定
+  * REDUDENT：兼容老版本InnoDB
+  * COMPACT: 默认格式         <-- 5.6开始默认使用的
+  * COMPRESSED：支持压缩
+  * DYNAMIC：大对象记录优化     <-- 5.7 开始默认使用的
+
+        (root@localhost) [dbt3]> show variables like 'innodb%row%';
+        +----------------------------+---------+
+        | Variable_name              | Value   |
+        +----------------------------+---------+
+        | innodb_api_disable_rowlock | OFF     |
+        | innodb_default_row_format  | dynamic | <--默认和COMPACT一样，只有存大对象的时候会优化
+        +----------------------------+---------+
+        2 rows in set (0.01 sec)
+
+一个页由页头Page header、页尾Page trailer、Row记录、row offset array 构成
+
+其中页头、页尾用来保证这个页的写入是完整的，页头页尾都有一个 LSN 校验值，如果页头的 LSN 和页尾的 LSN 相等的话这个页的写入就是完整的
+
+页头 Page header、页尾 Page trailer 会占用200个字节，所以每个页能存放的数据实际是 16K - 200字节
+
+B+树索引只能快速定位到**记录所在的页**，页内的数据存放是无序的，row offset array 就是对页内的记录进行排序的，和数据与数据之间的 next 指针不同，row offset array可以用来快速定位到页内的某一条记录
+
+### 表空间 -- 记录2
+
+* InnoDB 存储引擎是索引组织表
+  * Index Organized Table 
+  * 与ORacle IOT表类似
+  * 适合OLTP应用
+* 叶子节点存放所有数据
+  * 索引即数据
+  * 数据即索引
+* 聚集索引记录存在以下系统列
+  * rowid：6字节int B+树索引键值
+  * trx id： 6字节 事务id
+  * roll pointer：7字节 undo指针列
+
+假设有一张如下的表
+
+| a 主键 | b 普通索引 | c   | d   |
+| ------ | ---------- | --- | --- |
+| ...    | ...        | ... | ... |
+
+这时候这张表有两棵B+树索引，一个是主键的聚集索引，一个是普通索引
+
+主键索引叶子节点存放的是一整行完整的记录，在主键索引中的每一条记录是有隐藏列的
+
+    | rowid | trx id | roll pointer | a | b | c | d |

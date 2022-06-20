@@ -43,8 +43,9 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     +------------+---------------+------+-----+---------+-------+
     6 rows in set (0.00 sec)
 
-### 示例1
+示例1
 
+    (root@localhost) [employees]>
     SET @s = 'SELECT * FROM employees WHERE 1=1'; -- 写1=1是为了方便where继续拼接上其他条件，而不需要先拼接上一个实际的条件
     SET @s = CONCAT(@s, ' AND gender = "m"');
     SET @s = CONCAT(@s, ' AND birth_date >= "1960-01-01"'); -- 条件可以动态的添加删除
@@ -55,6 +56,7 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 或者
 
+    (root@localhost) [employees]>
     SET @s = 'SELECT * FROM employees WHERE 1=1'; 
     SET @s = CONCAT(@s, ' AND gender = ?');
     SET @s = CONCAT(@s, ' AND birth_date >= ?');
@@ -65,7 +67,7 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     EXECUTE stmt USING @a, @b;
     DEALLOCATE PREPARE stmt;
 
-### 示例2，带上了分页
+示例2，带上了分页
 
     SET @s = 'SELECT * FROM employees WHERE 1=1';
     SET @s = CONCAT(@s, ' AND gender = "m"');
@@ -216,7 +218,7 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     +------+------+
     3 rows in set (0.00 sec)
 
-## MySQL对语法的一些扩展
+## MySQL 对语法的一些扩展
 
 先插入一些示例数据：
 
@@ -247,7 +249,7 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
     +---+
     3 rows in set (0.00 sec)
 
-### on duplicate key 语法，如果有存在的项则更新，不建议使用
+### ON DUPLICATE KEY 语法，如果有存在的项则更新，不建议使用
 
     (root@localhost) [test]> begin;
     Query OK, 0 rows affected (0.00 sec)
@@ -366,10 +368,10 @@ https://dev.mysql.com/doc/refman/5.7/en/sql-prepared-statements.html
 
 replace 会将所有重复的数据先删掉再插入，是肯定可以执行成功的
 
-使用 on duplicate key 则不行：
+使用 ON DUPLICATE KEY 则不行：
 
     (root@localhost) [test]> insert into z values(2,3) on duplicate key update a = a + 10, b = 3;
-    ERROR 1062 (23000): Duplicate entry '3' for key 'idx_b' -- 再次遇到有唯一索引的3停止了，on duplicate key 执行的只是 update 操作，并不会执行 delet e和 insert
+    ERROR 1062 (23000): Duplicate entry '3' for key 'idx_b' -- 再次遇到有唯一索引的3停止了，on duplicate key 执行的只是 update 操作，并不会执行 delete 和 insert
     (root@localhost) [test]> rollback;
     Query OK, 0 rows affected (0.00 sec)
 
@@ -414,13 +416,13 @@ replace 是一个很好的语法，可以用来实现[幂等](https://zh.wikiped
 
 所以临时表在多个会话中可以创建同名的临时表，但是他们是互相独立的，维护的数据也不同
 
-临时表默认是 Innodb 的
+临时表默认是 InnoDB 的
 
     (root@localhost) [test]> show variables like '%tmp%';
     +----------------------------------+----------+
     | Variable_name                    | Value    |
     +----------------------------------+----------+
-    | default_tmp_storage_engine       | InnoDB   |
+    | default_tmp_storage_engine       | InnoDB   |  <--临时表默认使用InnoDB引擎
     | innodb_tmpdir                    |          |
     | internal_tmp_disk_storage_engine | InnoDB   |
     | max_tmp_tables                   | 32       |
@@ -432,7 +434,7 @@ replace 是一个很好的语法，可以用来实现[幂等](https://zh.wikiped
 
 在 MySQL 的数据文件目录下，有一个数据表文件 **ibtmp1**，叫临时表空间，在临时表中插入数据后这个数据表文件就会慢慢变大，数据库重启后这个文件会被删除重建
 
-同时创建临时表后，会在系统的 /tmp 目录下生成对应的临时表表结构文件，文件名类似 #sqlxxxxx.frm，而临时表的内容还是放在 MySQL 数据文件目录 ibtmp1 文件中
+同时创建临时表后，会在系统的 /tmp 目录下生成对应的临时表表结构文件，文件名类似 #sqlxxxxx.frm，而临时表的内容数据还是放在 MySQL 数据文件目录 ibtmp1 文件中
 
 在 5.6 版本中有些不同，5.6 中没有 ibtmp1 数据表文件，而会在 /tmp 下同时生成 #sqlxxxxx.frm 和 #sqlxxxxx.ibd文件，所有的内容都存放在 /tmp 目录下，如果 /tmp 目录不够大则会报错，而通常 /tmp 目录也不会很大要注意这个问题
 
@@ -448,9 +450,7 @@ replace 是一个很好的语法，可以用来实现[幂等](https://zh.wikiped
 
     ...
 
-存储过程中会产生很多临时的数据，这些数据有时会存放到临时表中，然后 select 一下返回给应用程序
-
-临时表在存储过程中会用得比较多
+临时表在存储过程中会用得比较多，存储过程中会产生很多临时的数据，这些数据有时会存放到临时表中，然后 select 一下返回给应用程序
 
 # 存储过程和自定义函数
 

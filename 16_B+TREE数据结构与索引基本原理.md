@@ -66,7 +66,7 @@ Explain 用来查看具体的执行计划
       partitions: NULL
             type: ref
     possible_keys: i_o_orderdate
-              key: i_o_orderdate    <--用到了普通二级索引，相对主键索引查询是要比较慢的，因为还要往后进行扫描
+              key: i_o_orderdate    <--用到了普通二级索引，相对主键索引查询是要比较慢的，因为还要往后进行回表扫描
           key_len: 4
               ref: const
             rows: 637
@@ -246,10 +246,10 @@ statement_analysis 这张表其实是一张视图，从 performance_schema 里�
 
 基于其他维度统计的一些表：
 
-* statements_with_errors_or_warnings 报 error 和 warning 的 SQL 语句有哪些
-* statements_with_full_table_scans   全表扫面或者没走索引的
-* statements_with_sorting            带有排序的
-* statements_with_temp_tables        带有临时表的
+* statements_with_errors_or_warnings    报 error 和 warning 的 SQL 语句有哪些
+* statements_with_full_table_scans          全表扫面或者没走索引的
+* statements_with_sorting                       带有排序的
+* statements_with_temp_tables               带有临时表的
 
 以前需要通过 slow.log 进行优化的手段，现在都可以通过 sys 库中的这几张表获得一些汇总信息，而 slow.log 则是一条条的记录
 
@@ -309,7 +309,8 @@ https://github.com/mysql/mysql-sys
     +---------------+---------------+------+-----+---------+-------+
     16 rows in set (0.00 sec)
 
-    (root@localhost) [information_schema]> SELECT 
+    (root@localhost) [information_schema]> 
+    SELECT 
         *
     FROM
         information_schema.TABLES t
