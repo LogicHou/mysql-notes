@@ -29,6 +29,8 @@
 
     docker exec -it learnmysql zsh
 
+[其他依赖和环境安装](https://github.com/LogicHou/nvim/blob/main/install.md#centos8-%E4%B8%8B%E7%9A%84%E5%AE%89%E8%A3%85%E6%B5%81%E7%A8%8B)
+
 安装oh-my-zsh
 
     vim /etc/resolv.conf
