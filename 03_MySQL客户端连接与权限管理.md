@@ -1,6 +1,6 @@
 # MySQL的配置文件
 
-* 文件名: my.cnf  (my.ini）
+* 文件名: my.cnf  (my.ini)
 * 文本文件
 * 可有多个配置文件
 * 参数替换原则
@@ -13,7 +13,7 @@ MySQL配置文件的读取顺序：
 
 MySQL启动的时候会依次读取以上的配置文件
 
-这就会产生一个问题，如果每个配置文件里面都有同样的参数，则后面配置文件中出现的参数会替换掉前面配置文件中的相同参数，即**参数替换原则**
+这就会产生一个问题，如果每个配置文件里面都有同样的参数，则**后面**配置文件中出现的参数会替换掉前面配置文件中的相同参数，即**参数替换原则**
 
 安装MySQL的时候要特别注意这个问题，以免安装后的实际效果不是你想要的那些结果
 
@@ -43,7 +43,7 @@ MySQL启动的时候会依次读取以上的配置文件
 
 ### MySQL配置参数
 
-* 从作用域上可分为global和session
+* 从作用域上可分为 global 和 session
 * 从类型上又可分为可修改和只读参数
 * 用户可在线修改非只读参数
 * 只读参数只能通过配置文件修改并重启
@@ -87,9 +87,9 @@ MySQL启动的时候会依次读取以上的配置文件
     +-----------------+-----------+
     1 row in set (0.00 sec)
 
-需要注意这样设置只对当前连接有效，上面的**show variables like 'long%query%';**相当于**show session variables like 'long%query%';**
+需要注意这样设置只对当前连接有效，上面的 **show variables like 'long%query%';** 相当于 **show session variables like 'long%query%';**
 
-我们可以将**session**改成**global**
+我们可以将 **session** 改成 **global**
 
     (root@localhost) [(none)]> set long_query_time = 1.5; # 设置为1.5秒
     Query OK, 0 rows affected (0.00 sec)
@@ -123,14 +123,14 @@ set + global
     +-----------------+-----------+
     1 row in set (0.01 sec)
 
-同样set加上global就会设置全局的值，但是需要注意的是即使使用了global进行设置，mysqld进程重启的话设置还是会回到10秒，启动参数需要通过my.cnf配置文件进行设置
+同样 set 加上 global 就会设置全局的值，但是需要注意的是即使使用了 global 进行设置，mysqld 进程重启的话设置还是会回到 10 秒，启动参数需要通过 my.cnf 配置文件进行设置
 
 有些参数在运行的时候是无法进行修改的：
 
     (root@localhost) [(none)]> set global datadir = '/mdata/q/';
     ERROR 1238 (HY000): Variable 'datadir' is a read only variable # 只读参数
 
-但是如果想查询多会话中配置参数的情况，使用命令行来进行查询就显得不怎么方便了。比如**show global variables**能查看全局变量**show variables**能查看自己当前会话的变量，看另外会话的变量是看不到的，为此MySQL从5.7版本**performance_schema**数据库中有新增和配置相关的几张数据表，用来查看不同进程（会话）中的配置参数：
+但是如果想查询多会话中配置参数的情况，使用命令行来进行查询就显得不怎么方便了。比如 **show global variables** 能查看全局变量 **show variables** 能查看自己当前会话的变量，看另外会话的变量是看不到的，为此 MySQL 从 5.7 版本 **performance_schema** 数据库中有新增和配置相关的几张数据表，用来查看不同进程（会话）中的配置参数：
 
     (root@localhost) [(none)]> use performance_schema;
     Database changed
@@ -145,7 +145,7 @@ set + global
     +--------------------------------------------+
     4 rows in set (0.00 sec)
 
-    # 查看所有会话中long_query_time变量的值
+    # 查看所有会话中 long_query_time 变量的值
     (root@localhost) [performance_schema]> select * from variables_by_thread where variable_name = 'long_query_time';
 
     +-----------+-----------------+----------------+
@@ -156,7 +156,7 @@ set + global
     +-----------+-----------------+----------------+
     1 row in set (0.00 sec)
 
-    # 查看当前内部线程或者外部线程连接到MySQL的列表，但是会发现Id值和上面的THREAD_ID无法对应，这两者不是一个Id
+    # 查看当前内部线程或者外部线程连接到 MySQL 的列表，但是会发现 Id 值和上面的 THREAD_ID 无法对应，这两者不是一个 Id
     (root@localhost) [performance_schema]> show processlist;
     +----+------+-----------+--------------------+---------+------+----------+------------------+
     | Id | User | Host      | db                 | Command | Time | State    | Info             |
@@ -246,7 +246,7 @@ https://dev.mysql.com/doc/refman/5.7/en/privileges-provided.html
 
 ## 创建用户
 
-创建一个名为 neo 允许任何ip访问(@''中的为ip地址，如果为%表示允许全部ip访问) 密码为123的用户
+创建一个名为 neo 允许任何 ip 访问 (@''中的为ip地址，如果为 % 表示允许全部 ip 访问) 密码为 123 的用户
 
     (root@localhost) [none]> create user 'neo'@'%' identified by '123';
 
@@ -284,7 +284,7 @@ https://dev.mysql.com/doc/refman/5.7/en/privileges-provided.html
     +---------------------------------+
     1 row in set (0.00 sec)
 
-授予增删查改权限，其中on test.*点号之前的 test 表示库级权限， 后面的 * 表示表级权限
+授予增删查改权限，其中 on test.* 点号之前的 test 表示库级权限， 后面的 * 表示表级权限
 
     (root@localhost) [none]> grant select,update,insert,delete on test.* to 'neo'@'%';
     Query OK, 0 rows affected (0.00 sec)
@@ -356,7 +356,7 @@ https://dev.mysql.com/doc/refman/5.7/en/privileges-provided.html
     +---------------------------------+
     1 row in set (0.00 sec)
 
-with grant option 使目标可以将**自身持有的权限**授予给其他用户，也就是说如果没有with grant option的权限，你登录了neo的账号，想为另一个用户授予权限是做不到的
+with grant option 使目标可以将**自身持有的权限**授予给其他用户，也就是说如果没有 with grant option 的权限，你登录了 neo 的账号，想为另一个用户授予权限是做不到的
 
     (root@localhost) [none]> grant select,update,insert,delete on test.* to 'neo'@'%' with grant option;
     Query OK, 0 rows affected (0.00 sec)
@@ -451,7 +451,7 @@ with grant option 使目标可以将**自身持有的权限**授予给其他用�
     +------------------------+-----------------------------------+------+-----+-----------------------+-------+
     45 rows in set (0.01 sec)
 
-查看用户部分权限，在5.7版本中密码的字段叫做authentication_string
+查看用户部分权限，在5.7版本中密码的字段叫做 authentication_string
 
     (root@localhost) [mysql]> select user,host,authentication_string from user;
     +---------------+-----------+-------------------------------------------+
@@ -464,7 +464,7 @@ with grant option 使目标可以将**自身持有的权限**授予给其他用�
     +---------------+-----------+-------------------------------------------+
     4 rows in set (0.00 sec)
 
-查看某个用户全局级别(user)的权限
+查看某个用户全局级别 (user) 的权限
 
     (root@localhost) [mysql]> select * from user where user='neo'\G
     *************************** 1. row ***************************
@@ -515,7 +515,7 @@ with grant option 使目标可以将**自身持有的权限**授予给其他用�
             account_locked: N
     1 row in set (0.00 sec)
 
-查看某个用户库(db)级别的权限
+查看某个用户库 (db) 级别的权限
 
     (root@localhost) [mysql]> select * from db where user='neo'\G
     *************************** 1. row ***************************
@@ -548,7 +548,7 @@ with grant option 使目标可以将**自身持有的权限**授予给其他用�
     (root@localhost) [mysql]> update db set Create_priv='Y' where user='neo';
     (root@localhost) [mysql]> flush privilieges;
 
-MySQL内置加密函数，不可逆
+MySQL 内置加密函数，不可逆
 
     (root@localhost) [mysql]> select password('456');
     +-------------------------------------------+
@@ -558,12 +558,12 @@ MySQL内置加密函数，不可逆
     +-------------------------------------------+
     1 row in set, 1 warning (0.00 sec)
 
-用户资源管理，grant不仅可以授予权限，还可以对用户的操作资源进行限制，MySQL支持四个维度来进行限制
+用户资源管理，grant 不仅可以授予权限，还可以对用户的操作资源进行限制，MySQL 支持四个维度来进行限制
 
-* MAX_QUERIES_PER_HOUR count 每小时执行查询的次数
-* MAX_UPDATES_PER_HOUR count 每小时执行更新的次数
-* MAX_CONNECTIONS_PER_HOUR count 每小时连接的最大次数
-* MAX_USER_CONNECTIONS count 单个用户最大的连接数
+* MAX_QUERIES_PER_HOUR count      每小时执行查询的次数
+* MAX_UPDATES_PER_HOUR count      每小时执行更新的次数
+* MAX_CONNECTIONS_PER_HOUR count  每小时连接的最大次数
+* MAX_USER_CONNECTIONS count      单个用户最大的连接数
 
 用法：
 

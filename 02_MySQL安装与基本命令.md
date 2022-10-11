@@ -3,6 +3,7 @@
 ## 官方安装文档链接
 
 https://dev.mysql.com/doc/refman/5.7/en/binary-installation.html
+https://dev.mysql.com/doc/refman/8.0/en/binary-installation.html
 
 MySQL依赖于libaio库，需要先安装，基于Yum的通过以下命令安装：
 
@@ -18,6 +19,7 @@ MySQL依赖于libaio库，需要先安装，基于Yum的通过以下命令安装
 MySQL 5.7.19以上还需要安装libnuma库：
 
     $ yum install numactl -y
+    $ apt install libnuma1
 
 首先确认系统上是否存在/etc/mysql/my.cnf文件，如果有将其重命名**mv /etc/mysql/my.cnf /etc/mysql/my.cnf.old**，然后将如下配置文件my.cnf放置到/etc/my.cnf
 
@@ -49,6 +51,7 @@ MySQL 5.7.19以上还需要安装libnuma库：
 如果碰到**bin/mysql: error while loading shared libraries: libncurses.so.5: cannot open shared object file: No such file or directory**错误，运行一下命令：
 
     $ yum install ncurses-compat-libs -y
+    $ apt install libncurses5
 
 执行 **bin/mysqld --initialize --user=mysql** 初始化命令后会打开/mdata/mysql_test_data/error.log文件查看密码：
 
