@@ -247,7 +247,6 @@ my.cnf 中推荐设置成 32M
 
 所以老业务推荐想清楚了再改，新业务则强烈推荐开启严格模式 my.cnf
 
-
     [mysqld]
     ...
     ...
@@ -306,6 +305,8 @@ my.cnf 中推荐设置成 32M
     3 rows in set (0.00 sec)
 
 优化前面的 utf8mb4 轮询语句
+
+TODO
 
     (root@localhost) [mysql]> SELECT 
         CONCAT(TABLE_SCHEMA, '.', table_name) AS name,
@@ -382,7 +383,7 @@ my.cnf 中推荐设置成 32M
 
 独立子查询示例：
 
-    (root@localhost) [test]> select * from a where userid in (1,2);
+    (root@localhost) [test]> 
     +--------+-------+---------------------+
     | userid | price | date                |
     +--------+-------+---------------------+
@@ -399,7 +400,7 @@ my.cnf 中推荐设置成 32M
     或者
     (root@localhost) [test]> select * from a where userid = 1 union select * from a where userid = 2;
 
-### EXISTS谓词
+### EXISTS 谓词
 
 * EXISTS 谓词
   * 仅返回 TRUE、FALSE

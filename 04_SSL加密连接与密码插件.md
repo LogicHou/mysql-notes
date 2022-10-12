@@ -1,8 +1,8 @@
 # 加密连接与密码插件
 
-## 连接MySQL实例
+## 连接 MySQL 实例
 
-* 通过本地socket进行连接
+* 通过本地 socket 进行连接
   * mysql -S /tmp/mysql.sock -u root -p
 * 通过TCP/IP协议远程连接
   * mysql -h 127.0.0.1 -P 3306 -u root -p
@@ -15,7 +15,7 @@
     password = 123
     socket = /tmp/mysql.sock
 
-查看socket文件位置
+查看 socket 文件位置
 
     (root@localhost) [(none)]> show variables like 'socket%';
     +---------------+-----------------+
@@ -25,9 +25,9 @@
     +---------------+-----------------+
     1 row in set (0.00 sec)
 
-这里连接的时候没有在配置文件中加入socket = /tmp/mysql.sock，在命令行连接MySQL的时候默认加上参数"-S /tmp/mysql.sock"
+这里连接的时候没有在配置文件中加入 socket = /tmp/mysql.sock，在命令行连接 MySQL 的时候默认加上参数"-S /tmp/mysql.sock"
 
-通过TCP/IP进行连接
+通过 TCP/IP 进行连接
 
     mysql -h127.0.0.1 -uroot -p123
 
@@ -57,9 +57,9 @@ MySQL状态信息中提供了当前连接方式的相关信息
     Threads: 1  Questions: 17  Slow queries: 0  Opens: 106  Flush tables: 1  Open tables: 99  Queries per second avg: 0.027
     --------------
 
-SSL方式连接，如何查看见上一部分内容，显示并没有启用SSL
+SSL 方式连接，如何查看见上一部分内容，显示并没有启用SSL
 
-通过查看参数方式查看是否启用了SSL
+通过查看参数方式查看是否启用了 SSL
 
     (root@localhost) [(none)]> show variables like '%ssl%';
     +---------------+-----------------+
@@ -77,12 +77,12 @@ SSL方式连接，如何查看见上一部分内容，显示并没有启用SSL
     +---------------+-----------------+
     9 rows in set (0.00 sec)
 
-如果没有配置SSL，在error.log文件中也会有Warning的提示
+如果没有配置 SSL，在 error.log 文件中也会有 Warning 的提示
 
     cat /mdata/mysql_test_data/error.log
     2017-03-22T07:41:53.975045Z 0 [Warning] Failed to set up SSL because of the following SSL library error: Unable to get private key
 
-为MySQL添加SSL支持（如果安装的时候没有添加SSL支持）
+为 MySQL 添加 SSL 支持（如果安装的时候没有添加 SSL 支持）
 
     shell> mysql_ssl_rsa_setup
     shell> cd /mdata/mysql_test_data/
@@ -148,11 +148,11 @@ SSL方式连接，如何查看见上一部分内容，显示并没有启用SSL
 
     mysql -h127.0.0.1 -uroot --ssl-mode=DISABLED
 
-需不需要使用SSL
+需不需要使用 SSL
 
     开启SSL会对性能产生影响，如果是内网使用的多则不需要开启，如果数据很机密推荐打开
 
-MySQL5.7默认使用SSL进行连接，可以强制用户使用SSL进行连接
+MySQL5.7 默认使用 SSL 进行连接，可以强制用户使用 SSL 进行连接
 
     (root@localhost) [(none)]> alter user 'neo'@'%' require ssl;
     Query OK, 0 rows affected (0.01 sec)
@@ -162,7 +162,7 @@ MySQL5.7默认使用SSL进行连接，可以强制用户使用SSL进行连接
     mysql: [Warning] Using a password on the command line interface can be insecure.
     ERROR 1045 (28000): Access denied for user 'neo'@'localhost' (using password: YES)
 
-X509 开启SSL的同时还需要提供公密钥文件，这里的公密钥文件存在于/mdata/mysql_test_data/ca.pem 下面
+X509 表示开启 SSL 的同时还需要提供公密钥文件，这里的公密钥文件存在于 /mdata/mysql_test_data/ca.pem 下面
 
     (root@localhost) [(none)]> alter user 'neo'@'%' require x509;
     Query OK, 0 rows affected (0.01 sec)

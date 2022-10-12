@@ -135,6 +135,8 @@ my.cnf 中稍微调大一点 sort_buffer_size
 
 在生产环境全局查看当前的 sort_buffer_size 设置的是否 OK，如果 Sort_merge_passes 比较大的话就需要调大 sort_buffer_size 这个参数：
 
+TODO：开率加入工具
+
     (root@localhost) [dbt3]> show global status like 'sort%';
     +-------------------+--------+
     | Variable_name     | Value  |
