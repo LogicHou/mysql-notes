@@ -317,7 +317,7 @@ https://dev.mysql.com/doc/refman/5.7/en/privileges-provided.html
     +------------------------------------------------------------------------------+
     2 rows in set (0.00 sec)
 
-授予所有权限
+**授予所有权限**
 
     (root@localhost) [(none)]> grant all on *.* to 'neo'@'%';
 

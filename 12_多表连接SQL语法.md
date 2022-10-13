@@ -68,7 +68,7 @@
     +------+------+------+---------------------+
     3 rows in set (0.00 sec)
 
-和 IN 语句的区别，上面的称为连接 JOIN，而下面的则是子查询也可以称为半连接
+和 IN 语句的区别，上面的称为连接 JOIN，而下面的则是子查询也可以称为**半连接**
 
     (root@localhost) [test]> select * from x where a in( select a from y );
     +------+------+
@@ -94,7 +94,9 @@ JOIN 和子查询其实是会有一些些关联的，但又不完全一样，IN 
     +------+------+
     2 rows in set (0.00 sec)
 
-JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)？ TODO
+JOIN 的性能问题(经常会听到说 JOIN 的性能很不好)？ 
+
+TODO
 
 ### 笛卡尔积 CROSS JOIN
 
@@ -384,8 +386,8 @@ RIGHT OUTER JOIN 右连接就是反过来右边那个表是保留表，原理和
             LEFT JOIN
         nation n ON c.c_nationkey = n_nationkey
     WHERE
-        o.o_orderkey IS NULL
-            AND o.o_orderDATE >= '1997-01-01' # 问题出现在这里，其实符合条件的没有下过订单的用户这里都是NULL值，所以用这个字段来进行判断本身就是互斥的是错误的
+        o.o_orderkey IS NULL # 问题出现在这里，其实符合条件的没有下过订单的用户这里都是NULL值，所以用这个字段来进行判断本身就是互斥的是错误的
+            AND o.o_orderDATE >= '1997-01-01'
             AND o.o_orderDATE < '1998-01-01'
             AND n.n_name = 'CANADA';
 
