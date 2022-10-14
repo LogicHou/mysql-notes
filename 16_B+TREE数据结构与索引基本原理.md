@@ -253,7 +253,7 @@ statement_analysis 这张表其实是一张视图，从 performance_schema 里�
 
 以前需要通过 slow.log 进行优化的手段，现在都可以通过 sys 库中的这几张表获得一些汇总信息，而 slow.log 则是一条条的记录
 
-MySQL5.6，5.7 开始 slow.log 有没有那种重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
+MySQL5.6，5.7 开始 slow.log 有没有那么重要，或许还不一定。如果是找线上哪些是平均慢了的可以找 sys 库，想找某个时间点可以找 slow.log
 
 MySQL5.6 并没有 sys 库，但是都是通过 performance_schema 中提取出来的，可以在一下链接中找到 sys_56.sql 文件生成视图
 
